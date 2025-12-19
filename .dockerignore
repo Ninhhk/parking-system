@@ -50,3 +50,27 @@ temp
 docs
 *.md
 !README.md
+
+# LPD-specific exclusions
+Licence-Plate-Detection-Recognition-Recording/venv/
+Licence-Plate-Detection-Recognition-Recording/env/
+Licence-Plate-Detection-Recognition-Recording/outputs/
+Licence-Plate-Detection-Recognition-Recording/detections/*.png
+Licence-Plate-Detection-Recognition-Recording/detections/*.jpg
+Licence-Plate-Detection-Recognition-Recording/samples/
+Licence-Plate-Detection-Recognition-Recording/input_videos/
+Licence-Plate-Detection-Recognition-Recording/output_videos/
+Licence-Plate-Detection-Recognition-Recording/.paddlex/
+Licence-Plate-Detection-Recognition-Recording/.idea/
+Licence-Plate-Detection-Recognition-Recording/.vscode/
+Licence-Plate-Detection-Recognition-Recording/.pytest_cache/
+Licence-Plate-Detection-Recognition-Recording/docs/
+Licence-Plate-Detection-Recognition-Recording/*.md
+Licence-Plate-Detection-Recognition-Recording/models/*.pt
+Licence-Plate-Detection-Recognition-Recording/models/*.pth
+Licence-Plate-Detection-Recognition-Recording/models/*.onnx
+Licence-Plate-Detection-Recognition-Recording/__pycache__/
+Licence-Plate-Detection-Recognition-Recording/**/__pycache__/
+Licence-Plate-Detection-Recognition-Recording/tests/
+Licence-Plate-Detection-Recognition-Recording/requirements-dev.txt
+Licence-Plate-Detection-Recognition-Recording/pytest.ini

@@ -28,8 +28,14 @@ class LicencePlateDetection:
         logger.info(f"Loading YOLO model from: {model_path}")
         self.model = YOLO(model_path)
         logger.info("Initializing PaddleOCR")
-        self.ocr = PaddleOCR(use_angle_cls=True, lang='en')
-        self.ocr = PaddleOCR(use_angle_cls=True, lang='en')
+        self.ocr = PaddleOCR(
+            use_angle_cls=True,
+            lang='en',
+            use_gpu=False,
+            enable_mkldnn=True,
+            cpu_threads=2,
+            show_log=False
+        )
     def detect_frames(self, frames):
         licence_plate_detections = []
         licence_plate_texts = []
@@ -93,6 +99,14 @@ class LicencePlateDetection:
                 else:
                     logger.warning("OCR result is empty")
                 licence_plate_texts.append(text)
+                
+                # Cleanup intermediate image arrays
+                del cropped_plate, gray, resized
+        
+        # Cleanup after processing
+        import gc
+        gc.collect()
+        
         return licence_plate_list, licence_plate_texts
 
     def draw_bboxes(self, video_frames, licence_plate_detections, licence_plate_texts):
@@ -185,6 +199,10 @@ class LicencePlateDetection:
                 "detection_time_ms": duration_ms,
             }
         )
+        
+        # Cleanup
+        import gc
+        gc.collect()
 
         return best_candidate
 
