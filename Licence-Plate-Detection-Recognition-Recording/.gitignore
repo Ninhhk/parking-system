@@ -1,0 +1,57 @@
+# Python virtual environment
+venv/
+env/
+.venv/
+*.pyc
+__pycache__/
+
+# Video directories
+input_videos/
+output_videos/
+
+# Generated outputs
+outputs/
+temp/
+captured_plate_*.png
+debug_*.png
+output_*.png
+
+# Model files (large)
+*.pt
+*.pth
+*.onnx
+models/*.pt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+
+# PaddleOCR cache
+.paddlex/
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+coverage.xml
+
+# MyPy
+.mypy_cache/

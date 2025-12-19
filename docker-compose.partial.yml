@@ -1,0 +1,75 @@
+services:
+  # License Plate Detection API (Python) - DOCKER - BuildKit Optimized
+  lpd-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.lpd
+      cache_from:
+        - type=gha
+      args:
+        BUILDKIT_INLINE_CACHE: "1"
+    container_name: parking-lot-lpd
+    environment:
+      FLASK_ENV: ${FLASK_ENV:-production}
+      PLATE_MODEL_PATH: /app/models/best.pt
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LPD_API_PORT: 8000
+      LPD_API_HOST: 0.0.0.0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./Licence-Plate-Detection-Recognition-Recording/models:/app/models
+      - ./Licence-Plate-Detection-Recognition-Recording/outputs:/app/outputs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - parking-lot-network
+    restart: unless-stopped
+
+  # Backend API (Node.js) - DOCKER - Multi-stage Optimized
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      cache_from:
+        - type=gha
+      args:
+        BUILDKIT_INLINE_CACHE: "1"
+    container_name: parking-lot-backend
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DB_HOST: host.docker.internal
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-ninh}
+      DB_NAME: parking-lot
+      SALT: ${SALT:-barking-lot}
+      SESSION_SECRET: ${SESSION_SECRET:-your-secret-key}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
+      LPD_API_URL: http://lpd-service:8000
+      LPD_TIMEOUT: ${LPD_TIMEOUT:-30000}
+      LPD_ENABLED: ${LPD_ENABLED:-true}
+      PORT: 5000
+    ports:
+      - "5000:5000"
+    depends_on:
+      - lpd-service
+    networks:
+      - parking-lot-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  parking-lot-network:
+    driver: bridge

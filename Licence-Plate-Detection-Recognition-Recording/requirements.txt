@@ -1,0 +1,34 @@
+# Core dependencies
+numpy==1.24.3
+ultralytics==8.0.196
+paddleocr==2.7.0
+opencv-python>=4.6.0,<=4.6.0.66
+requests==2.31.0
+flask==3.0.0
+werkzeug==3.0.1
+python-dotenv==1.0.0
+PyMuPDF==1.20.2
+
+# Testing dependencies
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+responses==0.24.1
+
+# Code quality
+black==23.12.0
+flake8==6.1.0
+mypy==1.7.1
+
+#pip install paddlepaddle --index-url https://pypi.org/simple
+# CPU (no GPU)
+#pip install paddlepaddle -i https://pypi.tuna.tsinghua.edu.cn/simple
+#If you're using GPU with CUDA 11.7:
+#pip install paddlepaddle-gpu==2.5.2.post117 -f https://www.paddlepaddle.org.cn/whl/windows/mkl/avx/stable.html
+#For CUDA Version 11.2, change post117 to post112
+
+#Install Microsoft Visual C++ Redistributable
+#Download and install:
+#Visual C++ Redistributable for Visual Studio 2015
+#https://www.microsoft.com/en-us/download/details.aspx?id=48145
+#Paddle requires some DLLs provided by these redistributables.

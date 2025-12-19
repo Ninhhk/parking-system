@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+/* Print styles */
+@media print {
+    /* Hide everything except the printable ticket */
+    body * {
+        visibility: hidden;
+    }
+    
+    /* Show only the printable ticket */
+    #printable-ticket,
+    #printable-ticket * {
+        visibility: visible;
+    }
+    
+    /* Position the printable ticket at the top left */
+    #printable-ticket {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    
+    /* Hide elements with no-print class */
+    .no-print {
+        display: none !important;
+    }
+    
+    /* Make sure print-only elements are displayed when printing */
+    .print-only {
+        display: block !important;
+    }
+}
+
+/* Hide print-only elements when not printing */
+.print-only {
+    display: none;
+}
