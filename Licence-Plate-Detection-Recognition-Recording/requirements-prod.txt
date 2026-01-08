@@ -1,12 +1,17 @@
 # Core dependencies - Production only
-numpy==1.24.3
+# numpy pinned to match torch 2.5.1 dependencies (not 1.24.3)
+# torch 2.5.1+cpu requires numpy>=2.0, so we use 2.2.6 for compatibility
+numpy==1.26.4
 # torch and torchvision are installed separately in Dockerfile to ensure correct version
 # torch==2.5.1  # Pin to 2.5.1 to avoid weights_only=True default in 2.6+
 # torchvision==0.20.1
 ultralytics>=8.3.0
 paddlepaddle==2.6.2
 paddleocr==2.7.0
-opencv-python>=4.6.0,<=4.6.0.66
+opencv-python-headless==4.6.0.66
+# Pin scientific stack to match NumPy 1.26 ABI
+scipy==1.11.4
+scikit-image==0.22.0
 requests==2.31.0
 flask==3.0.0
 werkzeug==3.0.1

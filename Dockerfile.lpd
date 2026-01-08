@@ -1,34 +1,11 @@
 # License Plate Detection (Python) Dockerfile - Optimized Build
-# Multi-stage build for better caching and smaller final image
+# Single-stage build for ML workloads (multi-stage doesn't save space with large deps)
 
-# Stage 1: Builder - Compile dependencies and create wheels
-FROM python:3.10-slim as builder
-
-WORKDIR /build
-
-# Install build dependencies (only in builder stage)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    python3-dev \
-    curl \
-    swig \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy production requirements
-COPY Licence-Plate-Detection-Recognition-Recording/requirements-prod.txt ./
-
-# Upgrade pip and install torch first to pin version, then create wheels
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir torch==2.5.1 torchvision==0.20.1 && \
-    pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements-prod.txt
-
-# Stage 2: Runtime - Minimal production image
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install only runtime dependencies (no build tools)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libsm6 \
@@ -39,15 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy wheels from builder and install
-COPY --from=builder /build/wheels /tmp/wheels
-COPY --from=builder /build/requirements-prod.txt .
+# Copy and install Python dependencies
+COPY Licence-Plate-Detection-Recognition-Recording/requirements-prod.txt .
 
+# Install all dependencies in one layer, leveraging pip cache
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
-    pip install --no-cache-dir torch==2.5.1 torchvision==0.20.1 && \
-    pip install --no-cache-dir --find-links=/tmp/wheels -r requirements-prod.txt && \
-    rm -rf /tmp/wheels
+    pip install torch==2.5.1 torchvision==0.20.1 && \
+    pip install -r requirements-prod.txt
 
 # Copy application code
 COPY Licence-Plate-Detection-Recognition-Recording/ ./

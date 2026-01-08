@@ -301,38 +301,6 @@ def get_metrics():
             'error': str(e)
         }), 500
 
-@app.route('/api/metrics', methods=['GET'])
-def get_metrics():
-    """Get service metrics including memory usage"""
-    try:
-        import psutil
-        import os
-        
-        process = psutil.Process(os.getpid())
-        memory_info = process.memory_info()
-        
-        return jsonify({
-            'success': True,
-            'memory': {
-                'rss_mb': round(memory_info.rss / 1024 / 1024, 2),
-                'vms_mb': round(memory_info.vms / 1024 / 1024, 2),
-                'percent': round(process.memory_percent(), 2)
-            },
-            'cpu_percent': process.cpu_percent(interval=0.1),
-            'num_threads': process.num_threads()
-        }), 200
-    except ImportError:
-        return jsonify({
-            'success': False,
-            'error': 'psutil not installed'
-        }), 500
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
 @app.route('/api/config', methods=['GET'])
 def get_config():
     """Get service configuration"""
