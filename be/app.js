@@ -4,6 +4,7 @@ const cookieParser = require("cookie-parser");
 const dotenv = require("dotenv");
 const session = require("express-session");
 const { connectDB } = require("./config/db");
+const { SESSION_MAX_AGE_MS } = require("./config/constants");
 
 // Load environment variables
 dotenv.config();
@@ -51,7 +52,7 @@ app.use(
         cookie: {
             //secure: process.env.NODE_ENV === 'production',
             httpOnly: true,
-            maxAge: 8 * 60 * 60 * 1000 + 7 * 60 * 60 * 1000, // 8 hours + (GMT+7)
+            maxAge: SESSION_MAX_AGE_MS,
         },
     })
 );

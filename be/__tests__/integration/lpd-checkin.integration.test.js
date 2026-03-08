@@ -219,7 +219,7 @@ describe('LPD Check-In Integration Flow', () => {
                 .post('/api/employee/parking/lpd-detect')
                 .send({ image: mockBase64Image });
 
-            expect(response.status).toBe(500);
+            expect(response.status).toBe(504);
             expect(response.body.success).toBe(false);
         });
     });

@@ -1,4 +1,28 @@
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: parking-lot-postgres
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password123}
+      POSTGRES_DB: ${DB_NAME:-parking_lot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - parking-lot-network
+    restart: unless-stopped
+
   # License Plate Detection API (Python)
   lpd-service:
     build:
@@ -39,12 +63,13 @@ services:
       dockerfile: Dockerfile.backend
     container_name: parking-lot-backend
     environment:
+      TZ: Asia/Ho_Chi_Minh
       NODE_ENV: ${NODE_ENV:-development}
-      DB_HOST: host.docker.internal
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-ninh}
-      DB_NAME: parking-lot
+      DB_HOST: postgres
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD:-password123}
+      DB_NAME: ${DB_NAME:-parking_lot}
       SALT: ${SALT:-barking-lot}
       SESSION_SECRET: ${SESSION_SECRET:-your-secret-key}
       CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
@@ -55,7 +80,10 @@ services:
     ports:
       - "5000:5000"
     depends_on:
-      - lpd-service
+      lpd-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     networks:
       - parking-lot-network
     healthcheck:
@@ -65,9 +93,10 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
 networks:
   parking-lot-network:
     driver: bridge
+
+volumes:
+  postgres_data:

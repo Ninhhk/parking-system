@@ -6,8 +6,9 @@ jest.mock('axios');
 describe('Employee LPD Service', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        process.env.LPD_SERVICE_URL = 'http://localhost:5000';
-        process.env.LPD_TIMEOUT = '30000';
+        // Note: Constants are loaded at import time, so we use the defaults from constants.js
+        // LPD_SERVICE_URL defaults to 'http://localhost:8000'
+        // LPD_TIMEOUT_MS defaults to 30000
     });
 
     describe('detectPlateFromImage', () => {
@@ -35,7 +36,7 @@ describe('Employee LPD Service', () => {
             });
 
             expect(axios.post).toHaveBeenCalledWith(
-                'http://localhost:5000/api/detect',
+                'http://localhost:8000/api/detect',
                 { image: mockBase64 },
                 expect.objectContaining({
                     timeout: 30000,
@@ -169,7 +170,7 @@ describe('Employee LPD Service', () => {
 
             expect(result).toBe(true);
             expect(axios.get).toHaveBeenCalledWith(
-                'http://localhost:5000/health',
+                'http://localhost:8000/health',
                 expect.objectContaining({ timeout: 5000 })
             );
         });

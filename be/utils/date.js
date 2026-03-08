@@ -1,17 +1,42 @@
+/**
+ * Date utilities for parking lot system
+ * 
+ * The TZ environment variable should be set to 'Asia/Ho_Chi_Minh' (UTC+7)
+ * in the Docker container for correct timezone handling.
+ */
+
+/**
+ * Gets today's date in YYYY-MM-DD format (local timezone)
+ */
 function getToday() {
-  const offsetMs = 7 * 60 * 60 * 1000; // UTC+7 for Vietnam timezone
-  return new Date(Date.now() + offsetMs).toISOString().slice(0, 10);
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
+/**
+ * Gets current datetime in 'YYYY-MM-DD HH:MM:SS' format (local timezone)
+ */
 function getCurrentTime() {
-  const offsetMs = 7 * 60 * 60 * 1000; // UTC+7 for Vietnam timezone
-  return new Date(Date.now() + offsetMs).toISOString().slice(0, 19).replace('T', ' ');
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 function getDayAfterMonths(start_date, months) {
   const date = new Date(start_date);
   date.setMonth(date.getMonth() + months);
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function calculateHoursDifference(startDate, endDate) {
@@ -23,7 +48,6 @@ function calculateHoursDifference(startDate, endDate) {
 function calculateHoursDifferenceCeil(startDate, endDate) {
   const diffMs = endDate - startDate;
   const diffHours = diffMs / (1000 * 60 * 60);
-  // Round up to the next integer
   return Math.ceil(diffHours);
 }
 

@@ -15,6 +15,9 @@ COPY be/ ./
 # Production stage
 FROM node:18-alpine
 
+# Install timezone data for TZ env var support
+RUN apk add --no-cache tzdata
+
 WORKDIR /app/be
 
 # Copy package files
