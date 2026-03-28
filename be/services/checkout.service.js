@@ -60,6 +60,10 @@ exports.createIntent = async ({ sessionId, paymentMethod, requestedAmount }) => 
         checkout_url: attached.checkout_url,
         expires_at: attached.expires_at,
         status: attached.status,
+        amount,
+        service_fee: feeResult.serviceFee,
+        penalty_fee: feeResult.penaltyFee,
+        hours: feeResult.hours,
     };
 };
 

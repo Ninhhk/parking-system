@@ -172,6 +172,13 @@ export default function PaymentDetailsPage() {
                 const intent = await createPaymentIntent(sessionid);
                 if (isCancelled) return;
                 setPaymentIntent(intent);
+                setCheckout((prev) => ({
+                    ...prev,
+                    amount: intent?.amount ?? prev.amount,
+                    serviceFee: intent?.service_fee ?? prev.serviceFee,
+                    penaltyFee: intent?.penalty_fee ?? prev.penaltyFee,
+                    hours: intent?.hours ?? prev.hours,
+                }));
                 setCardStatus(intent?.status || "PENDING");
             } catch (err) {
                 if (!isCancelled) {

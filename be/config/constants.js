@@ -5,10 +5,6 @@
  * hardcoded throughout the codebase. Allows easy modification and testing.
  */
 
-// Timezone Configuration (Vietnam = UTC+7)
-const TIMEZONE_OFFSET_HOURS = parseInt(process.env.TIMEZONE_OFFSET_HOURS || '7', 10);
-const TIMEZONE_OFFSET_MS = TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000;
-
 // Session Configuration
 const SESSION_MAX_AGE_HOURS = parseInt(process.env.SESSION_MAX_AGE_HOURS || '8', 10);
 const SESSION_MAX_AGE_MS = SESSION_MAX_AGE_HOURS * 60 * 60 * 1000;
@@ -47,10 +43,6 @@ const PAYOS_DEFAULT_CANCEL_URL =
     process.env.PAYOS_CANCEL_URL || 'http://localhost:3000/employee/checkout';
 
 module.exports = {
-    // Timezone
-    TIMEZONE_OFFSET_HOURS,
-    TIMEZONE_OFFSET_MS,
-
     // Session
     SESSION_MAX_AGE_HOURS,
     SESSION_MAX_AGE_MS,

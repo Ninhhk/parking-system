@@ -30,11 +30,16 @@ jest.mock("../../services/payos.client", () => ({
     verifyWebhook: jest.fn(),
 }));
 
+jest.mock("../../services/feeCalculation.service", () => ({
+    calculateAndValidateFee: jest.fn(),
+}));
+
 const checkoutService = require("../../services/checkout.service");
 const sessionRepo = require("../../repositories/session.repo");
 const attemptRepo = require("../../repositories/paymentAttempt.repo");
 const ledgerRepo = require("../../repositories/paymentLedger.repo");
 const payosClient = require("../../services/payos.client");
+const feeCalculationService = require("../../services/feeCalculation.service");
 
 describe("checkout service", () => {
     beforeEach(() => {
@@ -54,6 +59,13 @@ describe("checkout service", () => {
             penalty_fee: 50000,
             is_monthly: false,
             is_lost: false,
+        });
+        feeCalculationService.calculateAndValidateFee.mockReturnValue({
+            success: true,
+            totalAmount: 20000,
+            serviceFee: 20000,
+            penaltyFee: 0,
+            hours: 1,
         });
         attemptRepo.createAttempt.mockResolvedValue({ attempt_id: 10 });
         attemptRepo.attachProviderIntent.mockResolvedValue({
@@ -77,6 +89,10 @@ describe("checkout service", () => {
         });
         expect(result.status).toBe("PENDING");
         expect(result.checkout_url).toContain("payos/checkout");
+        expect(result.amount).toBe(20000);
+        expect(result.service_fee).toBe(20000);
+        expect(result.penalty_fee).toBe(0);
+        expect(result.hours).toBe(1);
         expect(attemptRepo.createAttempt).toHaveBeenCalledWith(
             expect.objectContaining({
                 sessionId: 1,
@@ -95,6 +111,13 @@ describe("checkout service", () => {
             penalty_fee: 50000,
             is_monthly: false,
             is_lost: false,
+        });
+        feeCalculationService.calculateAndValidateFee.mockReturnValue({
+            success: true,
+            totalAmount: 20000,
+            serviceFee: 20000,
+            penaltyFee: 0,
+            hours: 1,
         });
 
         await expect(
