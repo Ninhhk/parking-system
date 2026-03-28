@@ -3,19 +3,19 @@ const checkoutService = require("../services/checkout.service");
 exports.createIntent = async (req, res) => {
     try {
         const sessionId = Number(req.params.session_id);
-        const amount = Number(req.body.amount);
+        const requestedAmount = Number(req.body.amount);
 
-        if (!sessionId || !amount) {
+        if (!sessionId) {
             return res.status(422).json({
                 success: false,
-                message: "Session ID and amount are required",
+                message: "Session ID is required",
             });
         }
 
         const result = await checkoutService.createIntent({
             sessionId,
             paymentMethod: "CARD",
-            amount,
+            requestedAmount: Number.isFinite(requestedAmount) ? requestedAmount : undefined,
         });
 
         return res.status(201).json({

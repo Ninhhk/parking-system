@@ -36,9 +36,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_attempts_provider_order_code
 CREATE INDEX IF NOT EXISTS idx_payment_attempts_session_status_created
     ON payment_attempts(session_id, status, created_at DESC);
 
+DROP INDEX IF EXISTS uq_payment_session_id;
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_session_id
-    ON payment(session_id)
-    WHERE session_id IS NOT NULL;
+    ON payment(session_id);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_active_session_plate
     ON parkingsessions(license_plate)

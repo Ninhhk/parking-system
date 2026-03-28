@@ -11,7 +11,7 @@ const TIMEZONE_OFFSET_MS = TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000;
 
 // Session Configuration
 const SESSION_MAX_AGE_HOURS = parseInt(process.env.SESSION_MAX_AGE_HOURS || '8', 10);
-const SESSION_MAX_AGE_MS = SESSION_MAX_AGE_HOURS * 60 * 60 * 1000 + TIMEZONE_OFFSET_MS;
+const SESSION_MAX_AGE_MS = SESSION_MAX_AGE_HOURS * 60 * 60 * 1000;
 
 // Parking Business Rules
 const MAX_PARKING_HOURS = parseInt(process.env.MAX_PARKING_HOURS || '720', 10); // 30 days

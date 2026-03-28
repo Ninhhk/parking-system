@@ -103,16 +103,17 @@ exports.me = (req, res) => {
 exports.register = async (req, res) => {
     try {
         const { username, password, confirmPassword, full_name } = req.body;
+        const normalizedUsername = (username || "").trim();
 
         // --- Input validation ---
-        if (!username || !password || !confirmPassword || !full_name) {
+        if (!normalizedUsername || !password || !confirmPassword || !full_name) {
             return res.status(400).json({
                 success: false,
                 message: "All fields are required",
             });
         }
 
-        if (username.length < 3 || username.length > 50) {
+        if (normalizedUsername.length < 3 || normalizedUsername.length > 50) {
             return res.status(400).json({
                 success: false,
                 message: "Username must be between 3 and 50 characters",
@@ -141,7 +142,7 @@ exports.register = async (req, res) => {
         }
 
         // --- Duplicate check ---
-        const existingUser = await authRepo.findUserByUsername(username);
+        const existingUser = await authRepo.findUserByUsername(normalizedUsername);
         if (existingUser) {
             return res.status(409).json({
                 success: false,
@@ -151,7 +152,7 @@ exports.register = async (req, res) => {
 
         // --- Create user (default role: employee) ---
         const newUser = await authRepo.createUser({
-            username: username.trim(),
+            username: normalizedUsername,
             password,
             full_name: full_name.trim(),
             role: "employee",
@@ -176,6 +177,13 @@ exports.register = async (req, res) => {
             data: { user: req.session.user },
         });
     } catch (error) {
+        if (error?.code === "23505") {
+            return res.status(409).json({
+                success: false,
+                message: "Username already exists",
+            });
+        }
+
         console.error("Registration error:", error);
         res.status(500).json({
             success: false,

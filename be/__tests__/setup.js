@@ -15,5 +15,5 @@ global.console = {
 
 // Set test environment variables
 process.env.NODE_ENV = 'test';
-process.env.LPD_SERVICE_URL = 'http://localhost:5000';
+process.env.LPD_API_URL = 'http://localhost:8000';
 process.env.LPD_TIMEOUT = '30000';

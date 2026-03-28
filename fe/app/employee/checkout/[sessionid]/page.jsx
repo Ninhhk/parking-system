@@ -60,6 +60,7 @@ export default function PaymentDetailsPage() {
     const [creatingIntent, setCreatingIntent] = useState(false);
 
     const isCardStatusTerminal = cardStatus === "PAID" || cardStatus === "FAILED" || cardStatus === "EXPIRED";
+    const isLostTicketApplied = Boolean(checkout.session?.is_lost);
 
     useEffect(() => {
         if (!sessionid) return;
@@ -155,10 +156,7 @@ export default function PaymentDetailsPage() {
     };
 
     const getTotalAmount = () => {
-        if (isLostTicket) {
-            return (checkout.amount || 0) + (checkout.penaltyFee || 0);
-        }
-        return checkout.amount;
+        return checkout.amount || 0;
     };
 
     useEffect(() => {
@@ -171,7 +169,7 @@ export default function PaymentDetailsPage() {
         const createIntent = async () => {
             setCreatingIntent(true);
             try {
-                const intent = await createPaymentIntent(sessionid, getTotalAmount());
+                const intent = await createPaymentIntent(sessionid);
                 if (isCancelled) return;
                 setPaymentIntent(intent);
                 setCardStatus(intent?.status || "PENDING");
@@ -189,7 +187,7 @@ export default function PaymentDetailsPage() {
         return () => {
             isCancelled = true;
         };
-    }, [sessionid, paymentMethod, checkout.session, checkout.amount, isLostTicket]);
+    }, [sessionid, paymentMethod, checkout.session, checkout.amount]);
 
     useEffect(() => {
         if (paymentMethod !== "CARD" || !paymentIntent?.attempt_id) return;
@@ -412,7 +410,7 @@ export default function PaymentDetailsPage() {
                                             checkout.session.is_lost ? "text-red-600" : ""
                                         }`}
                                     >
-                                        {checkout.session.is_lost ? "Yes (penalty applied)" : "No"}
+                                        {isLostTicketApplied ? "Yes (penalty applied)" : "No"}
                                     </span>
                                 </div>
                             </div>

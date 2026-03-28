@@ -4,14 +4,26 @@ const sessionRepo = require("../repositories/session.repo");
 const paymentAttemptRepo = require("../repositories/paymentAttempt.repo");
 const paymentLedgerRepo = require("../repositories/paymentLedger.repo");
 const { PAYOS_DEFAULT_RETURN_URL, PAYOS_DEFAULT_CANCEL_URL } = require("../config/constants");
+const { calculateAndValidateFee } = require("./feeCalculation.service");
 
-exports.createIntent = async ({ sessionId, paymentMethod, amount }) => {
+exports.createIntent = async ({ sessionId, paymentMethod, requestedAmount }) => {
     const session = await sessionRepo.getSessionForCheckout(sessionId);
     if (!session) {
         throw new Error("Session not found");
     }
     if (session.time_out) {
         throw new Error("Session already checked out");
+    }
+
+    const feeResult = calculateAndValidateFee(session);
+    if (!feeResult.success) {
+        throw new Error(feeResult.error || "Unable to calculate payment amount");
+    }
+
+    const amount = feeResult.totalAmount;
+
+    if (Number.isFinite(requestedAmount) && Math.round(requestedAmount) !== Math.round(amount)) {
+        throw new Error("Requested amount does not match server-calculated amount");
     }
 
     const attempt = await paymentAttemptRepo.createAttempt({
@@ -22,7 +34,7 @@ exports.createIntent = async ({ sessionId, paymentMethod, amount }) => {
         amount,
     });
 
-    const orderCode = Number(`${Date.now()}`.slice(-9));
+    const orderCode = Number(attempt.attempt_id);
     const payosPayload = {
         orderCode,
         amount: Math.round(Number(amount)),
