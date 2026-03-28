@@ -30,11 +30,16 @@ jest.mock("../../services/payos.client", () => ({
     verifyWebhook: jest.fn(),
 }));
 
+jest.mock("../../services/feeCalculation.service", () => ({
+    calculateAndValidateFee: jest.fn(),
+}));
+
 const checkoutService = require("../../services/checkout.service");
 const sessionRepo = require("../../repositories/session.repo");
 const attemptRepo = require("../../repositories/paymentAttempt.repo");
 const ledgerRepo = require("../../repositories/paymentLedger.repo");
 const payosClient = require("../../services/payos.client");
+const feeCalculationService = require("../../services/feeCalculation.service");
 
 describe("checkout service", () => {
     beforeEach(() => {
@@ -46,7 +51,22 @@ describe("checkout service", () => {
     });
 
     it("createIntent creates pending attempt and returns qr payload", async () => {
-        sessionRepo.getSessionForCheckout.mockResolvedValue({ session_id: 1, time_out: null });
+        sessionRepo.getSessionForCheckout.mockResolvedValue({
+            session_id: 1,
+            time_out: null,
+            time_in: "2026-03-28T10:00:00.000Z",
+            service_fee: 20000,
+            penalty_fee: 50000,
+            is_monthly: false,
+            is_lost: false,
+        });
+        feeCalculationService.calculateAndValidateFee.mockReturnValue({
+            success: true,
+            totalAmount: 20000,
+            serviceFee: 20000,
+            penaltyFee: 0,
+            hours: 1,
+        });
         attemptRepo.createAttempt.mockResolvedValue({ attempt_id: 10 });
         attemptRepo.attachProviderIntent.mockResolvedValue({
             attempt_id: 10,
@@ -63,9 +83,50 @@ describe("checkout service", () => {
             expiredAt: "2026-03-28T12:00:00Z",
         });
 
-        const result = await checkoutService.createIntent({ sessionId: 1, paymentMethod: "CARD", amount: 20000 });
+        const result = await checkoutService.createIntent({
+            sessionId: 1,
+            paymentMethod: "CARD",
+        });
         expect(result.status).toBe("PENDING");
         expect(result.checkout_url).toContain("payos/checkout");
+        expect(result.amount).toBe(20000);
+        expect(result.service_fee).toBe(20000);
+        expect(result.penalty_fee).toBe(0);
+        expect(result.hours).toBe(1);
+        expect(attemptRepo.createAttempt).toHaveBeenCalledWith(
+            expect.objectContaining({
+                sessionId: 1,
+                paymentMethod: "CARD",
+                amount: expect.any(Number),
+            })
+        );
+    });
+
+    it("createIntent rejects tampered requested amount", async () => {
+        sessionRepo.getSessionForCheckout.mockResolvedValue({
+            session_id: 1,
+            time_out: null,
+            time_in: "2026-03-28T10:00:00.000Z",
+            service_fee: 20000,
+            penalty_fee: 50000,
+            is_monthly: false,
+            is_lost: false,
+        });
+        feeCalculationService.calculateAndValidateFee.mockReturnValue({
+            success: true,
+            totalAmount: 20000,
+            serviceFee: 20000,
+            penaltyFee: 0,
+            hours: 1,
+        });
+
+        await expect(
+            checkoutService.createIntent({
+                sessionId: 1,
+                paymentMethod: "CARD",
+                requestedAmount: 1000,
+            })
+        ).rejects.toThrow("Requested amount does not match server-calculated amount");
     });
 
     it("confirmCashCheckout rejects non-cash method", async () => {

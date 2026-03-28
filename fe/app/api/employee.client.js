@@ -48,9 +48,8 @@ export async function confirmCheckout(sessionId, paymentMethod) {
     return res.data;
 }
 
-export async function createPaymentIntent(sessionId, amount) {
+export async function createPaymentIntent(sessionId) {
     const res = await api.post(`/employee/parking/exit/${sessionId}/payment-intents`, {
-        amount,
         payment_method: "CARD",
     });
     return res.data.data;
