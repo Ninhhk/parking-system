@@ -1,0 +1,27 @@
+const { pool } = require("../config/db");
+
+exports.getSessionForCheckout = async (sessionId, client = pool) => {
+    const result = await client.query("SELECT * FROM parkingsessions WHERE session_id = $1", [sessionId]);
+    return result.rows[0] || null;
+};
+
+exports.finalizeSessionIfOpen = async ({ sessionId, totalAmount, isLost }, client) => {
+    const result = await client.query(
+        `UPDATE parkingsessions
+         SET time_out = NOW(), parking_fee = $1, is_lost = $2
+         WHERE session_id = $3 AND time_out IS NULL
+         RETURNING *`,
+        [totalAmount, !!isLost, sessionId]
+    );
+    return result.rows[0] || null;
+};
+
+exports.decrementLotCountAtomic = async ({ lotId, vehicleType }, client) => {
+    const column = vehicleType.toLowerCase() === "car" ? "current_car" : "current_bike";
+    await client.query(
+        `UPDATE parkinglots
+         SET ${column} = GREATEST(${column} - 1, 0)
+         WHERE lot_id = $1`,
+        [lotId]
+    );
+};

@@ -131,6 +131,11 @@ def detect_license_plate():
         raw_text = detection_result.get('plate_text', detection_result.get('raw_text', ''))
         normalized_plate = normalizer.sanitize(raw_text)
         
+        # Cleanup image arrays
+        del image, nparr, image_bytes
+        import gc
+        gc.collect()
+        
         if not normalized_plate:
             return jsonify({
                 'success': False,
@@ -227,6 +232,11 @@ def detect_batch():
                         'success': False,
                         'error': detection_result.get('error', 'Detection failed')
                     })
+                
+                # Cleanup after each iteration
+                del image, nparr, image_bytes
+                if 'detection_result' in locals():
+                    del detection_result
                     
             except Exception as e:
                 results.append({
@@ -234,6 +244,17 @@ def detect_batch():
                     'success': False,
                     'error': str(e)
                 })
+                # Cleanup on error
+                if 'image' in locals():
+                    del image
+                if 'nparr' in locals():
+                    del nparr
+                if 'image_bytes' in locals():
+                    del image_bytes
+        
+        # Final cleanup
+        import gc
+        gc.collect()
         
         return jsonify({
             'success': True,
@@ -249,6 +270,36 @@ def detect_batch():
             'error': f'Internal server error: {str(e)}'
         }), 500
 
+@app.route('/api/metrics', methods=['GET'])
+def get_metrics():
+    """Get service metrics including memory usage"""
+    try:
+        import psutil
+        import os
+        
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        
+        return jsonify({
+            'success': True,
+            'memory': {
+                'rss_mb': round(memory_info.rss / 1024 / 1024, 2),
+                'vms_mb': round(memory_info.vms / 1024 / 1024, 2),
+                'percent': round(process.memory_percent(), 2)
+            },
+            'cpu_percent': process.cpu_percent(interval=0.1),
+            'num_threads': process.num_threads()
+        }), 200
+    except ImportError:
+        return jsonify({
+            'success': False,
+            'error': 'psutil not installed'
+        }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
@@ -300,6 +351,7 @@ if __name__ == '__main__':
     print("  GET  /health")
     print("  POST /api/detect")
     print("  POST /api/detect-batch")
+    print("  GET  /api/metrics")
     print("  GET  /api/config")
     
     app.run(host=host, port=port, debug=debug)

@@ -9,6 +9,7 @@ const authMiddleware = require("../middlewares/auth.middleware");
 const monitorController = require("../controllers/employee.monitor.controller");
 const profileController = require("../controllers/employee.profile.controller");
 const lpdController = require("../controllers/employee.lpd.controller");
+const employeePaymentController = require("../controllers/employee.payment.controller");
 
 router.use(authMiddleware.isAuthenticated, authMiddleware.hasRole(["employee"]));
 
@@ -33,6 +34,8 @@ router.delete("/lost-tickets/:session_id", sessionsController.deleteLostTicket);
 router.post("/parking/entry", sessionsController.checkInVehicle);
 router.get("/parking/exit/:session_id", sessionsController.initiateCheckout);
 router.post("/parking/exit/confirm", sessionsController.confirmCheckout);
+router.post("/parking/exit/:session_id/payment-intents", employeePaymentController.createIntent);
+router.get("/parking/exit/:session_id/payment-status", employeePaymentController.getPaymentStatus);
 
 // Profile routes
 router.get("/profile", profileController.getMyProfile);

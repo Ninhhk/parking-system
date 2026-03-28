@@ -1,6 +1,7 @@
 const { pool } = require("../config/db");
 const { getToday } = require("../utils/date");
 const feeConfigRepo = require("./admin.feeConfig.repo");
+const { DEFAULT_PENALTY_FEE, UNKNOWN_GUEST_IDENTIFIER } = require("../config/constants");
 
 exports.startSession = async (sessionData) => {
     // Start a transaction
@@ -162,13 +163,13 @@ exports.confirmPayment = async (paymentData) => {
                     guest_identification,
                     guest_phone,
                     penalty_fee
-                ) VALUES ($1, 'UNKNOWN', 'UNKNOWN', $2)
+                ) VALUES ($1, $2, $3, $4)
             `;
 
             // Use the penalty fee from the fee config or a default value
-            const penaltyFee = session.penalty_fee || 50000;
+            const penaltyFee = session.penalty_fee || DEFAULT_PENALTY_FEE;
 
-            await client.query(lostTicketQuery, [session_id, penaltyFee]);
+            await client.query(lostTicketQuery, [session_id, UNKNOWN_GUEST_IDENTIFIER, UNKNOWN_GUEST_IDENTIFIER, penaltyFee]);
         }
 
         // Commit the transaction
@@ -330,6 +331,17 @@ exports.syncLostTicketStatus = async (session_id) => {
 
 exports.deleteLostTicketReportBySessionId = async (session_id) => {
     const query = `DELETE FROM LostTicketReport WHERE session_id = $1 RETURNING *`;
+    const result = await pool.query(query, [session_id]);
+    return result.rowCount > 0;
+};
+
+/**
+ * Clears the lost ticket status for a session
+ * @param {number|string} session_id - Session ID
+ * @returns {Promise<boolean>} True if updated
+ */
+exports.clearLostTicketStatus = async (session_id) => {
+    const query = `UPDATE ParkingSessions SET is_lost = false WHERE session_id = $1`;
     const result = await pool.query(query, [session_id]);
     return result.rowCount > 0;
 };

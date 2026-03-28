@@ -101,3 +101,41 @@ Default vehicle type is `car`. Modify call in `post_checkin` if needed or export
 - Integrate token-based auth to avoid login step.
 
 ---
+
+# Dockerized PostgreSQL Bootstrap (Schema Migration)
+
+This repo now includes a PostgreSQL service inside `docker-compose.yml` and schema bootstrap scripts under `db/init/`.
+
+## What is included
+- `postgres` service (`postgres:16-alpine`) with healthcheck and persistent volume.
+- Backend default DB host changed to service DNS: `postgres`.
+- Auto schema init scripts mounted to `/docker-entrypoint-initdb.d`:
+	- `db/init/001_schema.sql`
+	- `db/init/002_seed.sql`
+
+## First startup
+```powershell
+docker compose up -d --build
+```
+
+## Verify services
+```powershell
+docker compose ps
+docker compose logs postgres --tail 100
+docker compose logs backend --tail 100
+```
+
+## Important behavior
+- Init scripts run **only on first database volume creation**.
+- If you change schema SQL and want it applied from scratch, reset volume.
+
+## Reset DB (fresh re-bootstrap)
+```powershell
+docker compose down -v
+docker compose up -d --build
+```
+
+## Optional DB shell
+```powershell
+docker exec -it parking-lot-postgres psql -U admin -d parking_lot
+```

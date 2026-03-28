@@ -4,6 +4,7 @@ const cookieParser = require("cookie-parser");
 const dotenv = require("dotenv");
 const session = require("express-session");
 const { connectDB } = require("./config/db");
+const { SESSION_MAX_AGE_MS } = require("./config/constants");
 
 // Load environment variables
 dotenv.config();
@@ -12,6 +13,7 @@ dotenv.config();
 const authRoutes = require("./routes/auth.routes");
 const adminRoutes = require("./routes/admin.routes");
 const employeeRoutes = require("./routes/employee.routes");
+const paymentRoutes = require("./routes/payment.routes");
 
 // Initialize express app
 const app = express();
@@ -51,7 +53,7 @@ app.use(
         cookie: {
             //secure: process.env.NODE_ENV === 'production',
             httpOnly: true,
-            maxAge: 8 * 60 * 60 * 1000 + 7 * 60 * 60 * 1000, // 8 hours + (GMT+7)
+            maxAge: SESSION_MAX_AGE_MS,
         },
     })
 );
@@ -65,6 +67,7 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/employee", employeeRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

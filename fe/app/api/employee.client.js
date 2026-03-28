@@ -48,6 +48,19 @@ export async function confirmCheckout(sessionId, paymentMethod) {
     return res.data;
 }
 
+export async function createPaymentIntent(sessionId, amount) {
+    const res = await api.post(`/employee/parking/exit/${sessionId}/payment-intents`, {
+        amount,
+        payment_method: "CARD",
+    });
+    return res.data.data;
+}
+
+export async function fetchPaymentStatus(sessionId) {
+    const res = await api.get(`/employee/parking/exit/${sessionId}/payment-status`);
+    return res.data.data;
+}
+
 // Report a lost ticket (employee)
 export async function reportLostTicket({ session_id, guest_identification, guest_phone }) {
     const res = await api.post("/employee/lost-tickets", {

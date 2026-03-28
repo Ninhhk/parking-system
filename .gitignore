@@ -67,3 +67,6 @@ coverage/
 temp/
 tmp/
 *.tmp
+
+document
+.worktrees/

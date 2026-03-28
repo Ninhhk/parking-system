@@ -9,6 +9,15 @@ export const login = async (credentials) => {
     }
 };
 
+export const register = async (data) => {
+    try {
+        const response = await api.post("/auth/register", data);
+        return response.data.data;
+    } catch (error) {
+        throw error.response?.data || error.message;
+    }
+};
+
 export const logout = async () => {
     try {
         await api.post("/auth/logout");

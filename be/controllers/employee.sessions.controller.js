@@ -1,8 +1,10 @@
 const sessionsRepo = require("../repositories/employee.sessions.repo");
 const feeConfigRepo = require("../repositories/admin.feeConfig.repo");
 const lotsRepo = require("../repositories/admin.lots.repo");
-const { pool } = require("../config/db"); // Import the pool
-const { getToday, calculateHoursDifference } = require("../utils/date");
+const { getToday } = require("../utils/date");
+const { calculateAndValidateFee } = require("../services/feeCalculation.service");
+const { LICENSE_PLATE_REGEX, VALID_PAYMENT_METHODS } = require("../config/constants");
+const checkoutService = require("../services/checkout.service");
 
 // Vehicle Entry - Create a new parking session
 exports.checkInVehicle = async (req, res) => {
@@ -25,8 +27,7 @@ exports.checkInVehicle = async (req, res) => {
         }
 
         // Validate license plate format (alphanumeric with optional hyphen)
-        const licensePlateRegex = /^[A-Z0-9-]+$/i;
-        if (!licensePlateRegex.test(license_plate)) {
+        if (!LICENSE_PLATE_REGEX.test(license_plate)) {
             return res.status(422).json({
                 success: false,
                 message: "Invalid license plate format",
@@ -164,50 +165,15 @@ exports.initiateCheckout = async (req, res) => {
             });
         }
 
-        // Calculate parking duration and fee - using Math.ceil for rounding up
-        const currentTime = new Date();
-        const checkInTime = new Date(session.time_in);
-        // Round up to the next hour for better UX and simpler calculations
-        let hours = Math.ceil(calculateHoursDifference(checkInTime, currentTime));
+        // Use centralized fee calculation service
+        const feeResult = calculateAndValidateFee(session);
 
-        // Validate reasonable parking duration (max 30 days = 720 hours)
-        const MAX_PARKING_HOURS = 720;
-        if (hours > MAX_PARKING_HOURS) {
+        if (!feeResult.success) {
             return res.status(400).json({
                 success: false,
-                message: `Parking duration exceeds maximum allowed (${MAX_PARKING_HOURS} hours / 30 days). Please contact administrator.`,
-                hours: hours,
-            });
-        }
-
-        let totalAmount = 0;
-        let penaltyFee = parseFloat(session.penalty_fee);
-        let serviceFee = parseFloat(session.service_fee);
-
-        if (!session.is_lost) {
-            penaltyFee = 0;
-        }
-        // Check if is_monthly is true from the session
-        if (session.is_monthly) {
-            // No charge for monthly subscribers
-            serviceFee = 0;
-        }
-
-        // Calculate payment based on hours
-        if (hours > 1) {
-            serviceFee = serviceFee * hours;
-        }
-
-        totalAmount = serviceFee + penaltyFee;
-        
-        // Validate total amount doesn't exceed database limit
-        const MAX_AMOUNT = 99999999.99; // NUMERIC(10,2) limit
-        if (totalAmount > MAX_AMOUNT) {
-            return res.status(400).json({
-                success: false,
-                message: `Calculated amount (${totalAmount.toFixed(2)}) exceeds maximum allowed (${MAX_AMOUNT}). Please contact administrator.`,
-                hours: hours,
-                totalAmount: totalAmount,
+                message: feeResult.error,
+                hours: feeResult.hours,
+                totalAmount: feeResult.totalAmount,
             });
         }
 
@@ -215,10 +181,10 @@ exports.initiateCheckout = async (req, res) => {
         res.status(200).json({
             success: true,
             message: "Checkout information retrieved",
-            amount: totalAmount,
-            hours: hours,
-            serviceFee: serviceFee,
-            penaltyFee: penaltyFee,
+            amount: feeResult.totalAmount,
+            hours: feeResult.hours,
+            serviceFee: feeResult.serviceFee,
+            penaltyFee: feeResult.penaltyFee,
             session_details: session,
         });
     } catch (error) {
@@ -229,6 +195,7 @@ exports.initiateCheckout = async (req, res) => {
         });
     }
 };
+
 
 // Vehicle Exit - Stage 2: Confirm payment and complete checkout
 exports.confirmCheckout = async (req, res) => {
@@ -245,12 +212,18 @@ exports.confirmCheckout = async (req, res) => {
         // Sync lost ticket status
         await sessionsRepo.syncLostTicketStatus(session_id);
 
-        // Valid payment methods
-        const validPaymentMethods = ["CASH", "CARD"];
-        if (!validPaymentMethods.includes(payment_method)) {
+        // Validate payment method using constants
+        if (!VALID_PAYMENT_METHODS.includes(payment_method)) {
             return res.status(422).json({
                 success: false,
                 message: "Invalid payment method",
+            });
+        }
+
+        if (payment_method === "CARD") {
+            return res.status(409).json({
+                success: false,
+                message: "CARD payment must be completed via QR and webhook",
             });
         }
 
@@ -274,72 +247,37 @@ exports.confirmCheckout = async (req, res) => {
             });
         }
 
-        // Calculate parking duration and fee
-        const currentTime = new Date();
-        const checkInTime = new Date(session.time_in);
-        let hours = Math.ceil(calculateHoursDifference(checkInTime, currentTime));
-        
-        // Validate reasonable parking duration (max 30 days = 720 hours)
-        const MAX_PARKING_HOURS = 720;
-        if (hours > MAX_PARKING_HOURS) {
+        // Use centralized fee calculation service (same as initiateCheckout)
+        const feeResult = calculateAndValidateFee(session);
+
+        if (!feeResult.success) {
             return res.status(400).json({
                 success: false,
-                message: `Parking duration exceeds maximum allowed (${MAX_PARKING_HOURS} hours / 30 days). Please contact administrator.`,
-                hours: hours,
-            });
-        }
-        
-        let totalAmount = 0;
-        let sub_id = null;
-        if (session.is_monthly) {
-            if (session.is_lost) {
-                totalAmount = session.penalty_fee;
-            } else totalAmount = 0;
-        } else {
-            serviceFee = parseFloat(session.service_fee);
-            if (hours <= 1) {
-                totalAmount = serviceFee;
-            } else {
-                totalAmount = serviceFee * hours;
-            }
-            if (session.is_lost && session.penalty_fee) {
-                totalAmount += parseFloat(session.penalty_fee);
-            }
-        }
-        
-        // Final validation: ensure total amount doesn't exceed database limit
-        const MAX_AMOUNT = 99999999.99; // NUMERIC(10,2) limit
-        if (totalAmount > MAX_AMOUNT) {
-            return res.status(400).json({
-                success: false,
-                message: `Calculated amount (${totalAmount.toFixed(2)}) exceeds maximum allowed (${MAX_AMOUNT}). Please contact administrator.`,
-                hours: hours,
-                totalAmount: totalAmount,
+                message: feeResult.error,
+                hours: feeResult.hours,
+                totalAmount: feeResult.totalAmount,
             });
         }
 
-        // NOW create the payment record and update the session in one transaction
-        const { payment, session: updatedSession } = await sessionsRepo.createAndConfirmPayment({
-            session_id,
-            sub_id: null,
-            total_amount: totalAmount,
-            payment_method,
-            is_lost: session.is_lost,
+        const cashResult = await checkoutService.confirmCashCheckout({
+            sessionId: Number(session_id),
+            totalAmount: feeResult.totalAmount,
+            isLost: session.is_lost,
+            paymentMethod: payment_method,
         });
 
         res.status(200).json({
             success: true,
             message: "Checkout completed successfully",
             payment: {
-                payment_id: payment.payment_id,
-                session_id: payment.session_id,
-                amount: payment.total_amount,
-                method: payment.payment_method,
-                paid_at: payment.payment_date,
+                session_id: Number(session_id),
+                amount: feeResult.totalAmount,
+                method: payment_method,
+                paid_at: new Date().toISOString(),
             },
             session: {
-                session_id: updatedSession.session_id,
-                time_out: updatedSession.time_out,
+                session_id: Number(session_id),
+                time_out: cashResult.finalized ? new Date().toISOString() : session.time_out,
             },
         });
     } catch (error) {
@@ -430,7 +368,8 @@ exports.deleteLostTicket = async (req, res) => {
         if (!deleted) {
             return res.status(404).json({ success: false, message: "Lost ticket report not found" });
         }
-        await pool.query(`UPDATE ParkingSessions SET is_lost = false WHERE session_id = $1`, [session_id]);
+        // Use repository method instead of direct pool access (DIP compliance)
+        await sessionsRepo.clearLostTicketStatus(session_id);
         res.status(200).json({ success: true, message: "Lost ticket report deleted" });
     } catch (error) {
         res.status(500).json({ success: false, message: "Internal server error" });

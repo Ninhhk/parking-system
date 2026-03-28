@@ -1,7 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { initiateCheckout, confirmCheckout, reportLostTicket, deleteLostTicket } from "@/app/api/employee.client";
+import {
+    initiateCheckout,
+    confirmCheckout,
+    reportLostTicket,
+    deleteLostTicket,
+    createPaymentIntent,
+    fetchPaymentStatus,
+} from "@/app/api/employee.client";
 import PageHeader from "@/app/components/common/PageHeader";
 import { useToast } from "@/app/components/providers/ToastProvider";
 import {
@@ -15,6 +22,14 @@ import {
     FaIdCard,
     FaExclamationTriangle,
 } from "react-icons/fa";
+
+const CARD_STATUS_LABELS = {
+    PENDING: "Pending payment",
+    PAID: "Paid",
+    FAILED: "Payment failed",
+    EXPIRED: "Payment expired",
+    NOT_FOUND: "No active payment intent",
+};
 
 export default function PaymentDetailsPage() {
     const params = useParams();
@@ -32,7 +47,7 @@ export default function PaymentDetailsPage() {
         penaltyFee: null,
         session: null,
     });
-    const [paymentMethod, setPaymentMethod] = useState("CASH");
+    const [paymentMethod, setPaymentMethod] = useState("CARD");
     const [liveHours, setLiveHours] = useState(null);
     const [currentTime, setCurrentTime] = useState(new Date());
     const [showLostTicketForm, setShowLostTicketForm] = useState(false);
@@ -40,6 +55,11 @@ export default function PaymentDetailsPage() {
     const [guestPhone, setGuestPhone] = useState("");
     const [isLostTicket, setIsLostTicket] = useState(false);
     const [reportingLost, setReportingLost] = useState(false);
+    const [paymentIntent, setPaymentIntent] = useState(null);
+    const [cardStatus, setCardStatus] = useState("PENDING");
+    const [creatingIntent, setCreatingIntent] = useState(false);
+
+    const isCardStatusTerminal = cardStatus === "PAID" || cardStatus === "FAILED" || cardStatus === "EXPIRED";
 
     useEffect(() => {
         if (!sessionid) return;
@@ -83,6 +103,10 @@ export default function PaymentDetailsPage() {
     const handleConfirmPayment = async () => {
         if (!checkout.session) {
             toast.error("No checkout session to confirm");
+            return;
+        }
+        if (paymentMethod === "CARD") {
+            toast.error("CARD payment is completed automatically after webhook confirmation");
             return;
         }
         setLoading(true);
@@ -136,6 +160,67 @@ export default function PaymentDetailsPage() {
         }
         return checkout.amount;
     };
+
+    useEffect(() => {
+        if (!sessionid || !checkout.session || paymentMethod !== "CARD") return;
+        if (cardStatus === "PAID") return;
+        if (!getTotalAmount() || creatingIntent) return;
+
+        let isCancelled = false;
+
+        const createIntent = async () => {
+            setCreatingIntent(true);
+            try {
+                const intent = await createPaymentIntent(sessionid, getTotalAmount());
+                if (isCancelled) return;
+                setPaymentIntent(intent);
+                setCardStatus(intent?.status || "PENDING");
+            } catch (err) {
+                if (!isCancelled) {
+                    toast.error(err.response?.data?.message || "Failed to create payment QR");
+                }
+            } finally {
+                if (!isCancelled) setCreatingIntent(false);
+            }
+        };
+
+        createIntent();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [sessionid, paymentMethod, checkout.session, checkout.amount, isLostTicket]);
+
+    useEffect(() => {
+        if (paymentMethod !== "CARD" || !paymentIntent?.attempt_id) return;
+
+        const timer = setInterval(async () => {
+            try {
+                const statusResult = await fetchPaymentStatus(sessionid);
+                const nextStatus = statusResult?.status || "PENDING";
+                setCardStatus(nextStatus);
+
+                if (nextStatus === "PAID") {
+                    clearInterval(timer);
+                    toast.success("Card payment confirmed");
+                    const params = new URLSearchParams({
+                        license_plate: checkout.session.license_plate,
+                        duration_hours: (liveHours ?? checkout.hours).toString(),
+                        amount: getTotalAmount().toString(),
+                        is_monthly: checkout.session.is_monthly ? "true" : "false",
+                        payment_method: "CARD",
+                    });
+                    router.replace(`/employee/checkout/success?${params.toString()}`);
+                } else if (nextStatus === "FAILED" || nextStatus === "EXPIRED") {
+                    clearInterval(timer);
+                }
+            } catch (err) {
+                setCardStatus("PENDING");
+            }
+        }, 3000);
+
+        return () => clearInterval(timer);
+    }, [paymentMethod, paymentIntent, sessionid, checkout.session, checkout.hours, liveHours]);
 
     const formatDateTime = (dateStr) => {
         if (!dateStr) return "N/A";
@@ -444,6 +529,45 @@ export default function PaymentDetailsPage() {
                                 />
                             </div>
                         </div>
+                {paymentMethod === "CARD" && (
+                            <div className="mt-4 border rounded-lg p-4 bg-white">
+                                <h4 className="text-sm font-semibold text-gray-800 mb-2">PayOS QR Payment</h4>
+                                {creatingIntent && (
+                                    <p className="text-sm text-gray-600">Generating payment QR...</p>
+                                )}
+                                {!creatingIntent && paymentIntent?.checkout_url && (
+                                    <>
+                                        <p className="text-sm text-gray-700 mb-2">
+                                            Open checkout link or scan QR to complete payment.
+                                        </p>
+                                        <a
+                                            href={paymentIntent.checkout_url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-block text-sm text-blue-600 underline"
+                                        >
+                                            Open PayOS Checkout
+                                        </a>
+                                    </>
+                                )}
+                                <p className="text-xs text-gray-500 mt-2">Status: {cardStatus}</p>
+                                <p className="text-xs text-gray-600">
+                                    {CARD_STATUS_LABELS[cardStatus] || "Waiting for update"}
+                                </p>
+                                {isCardStatusTerminal && cardStatus !== "PAID" && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCardStatus("PENDING");
+                                            setPaymentIntent(null);
+                                        }}
+                                        className="mt-2 text-xs text-blue-600 underline"
+                                    >
+                                        Create new payment QR
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <div className="flex justify-between">
                         <button
@@ -454,7 +578,7 @@ export default function PaymentDetailsPage() {
                         </button>
                         <button
                             onClick={handleConfirmPayment}
-                            disabled={loading || (showLostTicketForm && !isLostTicket)}
+                            disabled={loading || paymentMethod === "CARD" || (showLostTicketForm && !isLostTicket)}
                             className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 flex items-center"
                         >
                             {loading ? (
@@ -465,7 +589,7 @@ export default function PaymentDetailsPage() {
                             ) : (
                                 <>
                                     <FaCheckCircle className="mr-2 h-4 w-4" />
-                                    Confirm Payment
+                                    {paymentMethod === "CARD" ? "Waiting for webhook confirmation" : "Confirm Payment"}
                                 </>
                             )}
                         </button>

@@ -1,10 +1,13 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-
-const LPD_SERVICE_URL = process.env.LPD_API_URL || 'http://localhost:8000';
-const LPD_DETECT_ENDPOINT = '/api/detect';
-const LPD_TIMEOUT = parseInt(process.env.LPD_TIMEOUT || '30000', 10);
+const {
+    LPD_SERVICE_URL,
+    LPD_DETECT_ENDPOINT,
+    LPD_TIMEOUT_MS,
+    LPD_HEALTH_CHECK_TIMEOUT_MS,
+    LPD_DEFAULT_CONFIDENCE
+} = require('../config/constants');
 
 /**
  * Employee LPD Service
@@ -27,7 +30,7 @@ exports.detectPlateFromImage = async (base64Image) => {
 
         // Convert base64 to buffer to validate it's actual image data
         const buffer = Buffer.from(base64Image, 'base64');
-        
+
         if (buffer.length === 0) {
             throw new Error('Image data is empty');
         }
@@ -39,7 +42,7 @@ exports.detectPlateFromImage = async (base64Image) => {
                 image: base64Image,
             },
             {
-                timeout: LPD_TIMEOUT,
+                timeout: LPD_TIMEOUT_MS,
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -63,7 +66,7 @@ exports.detectPlateFromImage = async (base64Image) => {
             success: true,
             normalized_plate,
             raw_text: raw_text || normalized_plate,
-            confidence: confidence || 0.9,
+            confidence: confidence || LPD_DEFAULT_CONFIDENCE,
         };
 
     } catch (error) {
@@ -113,10 +116,10 @@ exports.detectPlateFromImage = async (base64Image) => {
 function isValidBase64(str) {
     try {
         if (typeof str !== 'string') return false;
-        
+
         // Base64 regex pattern
         const base64Regex = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
-        
+
         if (!base64Regex.test(str)) {
             return false;
         }
@@ -139,7 +142,7 @@ exports.healthCheck = async () => {
         const response = await axios.get(
             `${LPD_SERVICE_URL}/health`,
             {
-                timeout: 5000,
+                timeout: LPD_HEALTH_CHECK_TIMEOUT_MS,
             }
         );
 
