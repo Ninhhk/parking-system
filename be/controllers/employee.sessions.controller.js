@@ -4,6 +4,7 @@ const lotsRepo = require("../repositories/admin.lots.repo");
 const { getToday } = require("../utils/date");
 const { calculateAndValidateFee } = require("../services/feeCalculation.service");
 const { LICENSE_PLATE_REGEX, VALID_PAYMENT_METHODS } = require("../config/constants");
+const checkoutService = require("../services/checkout.service");
 
 // Vehicle Entry - Create a new parking session
 exports.checkInVehicle = async (req, res) => {
@@ -219,6 +220,13 @@ exports.confirmCheckout = async (req, res) => {
             });
         }
 
+        if (payment_method === "CARD") {
+            return res.status(409).json({
+                success: false,
+                message: "CARD payment must be completed via QR and webhook",
+            });
+        }
+
         // Get session information
         const session = await sessionsRepo.getSession(session_id);
         if (!session) {
@@ -251,28 +259,25 @@ exports.confirmCheckout = async (req, res) => {
             });
         }
 
-        // NOW create the payment record and update the session in one transaction
-        const { payment, session: updatedSession } = await sessionsRepo.createAndConfirmPayment({
-            session_id,
-            sub_id: null,
-            total_amount: feeResult.totalAmount,
-            payment_method,
-            is_lost: session.is_lost,
+        const cashResult = await checkoutService.confirmCashCheckout({
+            sessionId: Number(session_id),
+            totalAmount: feeResult.totalAmount,
+            isLost: session.is_lost,
+            paymentMethod: payment_method,
         });
 
         res.status(200).json({
             success: true,
             message: "Checkout completed successfully",
             payment: {
-                payment_id: payment.payment_id,
-                session_id: payment.session_id,
-                amount: payment.total_amount,
-                method: payment.payment_method,
-                paid_at: payment.payment_date,
+                session_id: Number(session_id),
+                amount: feeResult.totalAmount,
+                method: payment_method,
+                paid_at: new Date().toISOString(),
             },
             session: {
-                session_id: updatedSession.session_id,
-                time_out: updatedSession.time_out,
+                session_id: Number(session_id),
+                time_out: cashResult.finalized ? new Date().toISOString() : session.time_out,
             },
         });
     } catch (error) {

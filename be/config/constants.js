@@ -36,6 +36,16 @@ const LPD_DEFAULT_CONFIDENCE = 0.9;
 // Guest Defaults for Lost Ticket
 const UNKNOWN_GUEST_IDENTIFIER = 'UNKNOWN';
 
+// Payment Attempt
+const PAYMENT_ATTEMPT_STATUSES = ['PENDING', 'PAID', 'FAILED', 'EXPIRED'];
+const PAYMENT_PROVIDERS = ['PAYOS', 'OFFLINE'];
+
+// PayOS
+const PAYOS_DEFAULT_RETURN_URL =
+    process.env.PAYOS_RETURN_URL || 'http://localhost:3000/employee/checkout';
+const PAYOS_DEFAULT_CANCEL_URL =
+    process.env.PAYOS_CANCEL_URL || 'http://localhost:3000/employee/checkout';
+
 module.exports = {
     // Timezone
     TIMEZONE_OFFSET_HOURS,
@@ -67,4 +77,12 @@ module.exports = {
 
     // Guest Defaults
     UNKNOWN_GUEST_IDENTIFIER,
+
+    // Payment Attempt
+    PAYMENT_ATTEMPT_STATUSES,
+    PAYMENT_PROVIDERS,
+
+    // PayOS
+    PAYOS_DEFAULT_RETURN_URL,
+    PAYOS_DEFAULT_CANCEL_URL,
 };
