@@ -83,7 +83,7 @@ describe("paymentIntent repo query contracts", () => {
 
         expect(mockPoolQuery).toHaveBeenCalledWith(
             expect.stringContaining("UPDATE payment_intents"),
-            ["PAID", "pi_1", "oc_1", "https://checkout", "2026-03-29T10:00:00Z", JSON.stringify({ foo: "bar" }), 7]
+            ["PAID", null, "pi_1", "oc_1", "https://checkout", "2026-03-29T10:00:00Z", JSON.stringify({ foo: "bar" }), 7]
         );
     });
 

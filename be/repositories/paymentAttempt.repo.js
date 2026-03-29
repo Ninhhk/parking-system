@@ -1,10 +1,6 @@
 const { pool } = require("../config/db");
 
 exports.createAttempt = async ({ sessionId, subId, intentId, provider, paymentMethod, amount }, client = pool) => {
-    if (!intentId) {
-        throw new Error("intentId is required");
-    }
-
     const result = await client.query(
         `INSERT INTO payment_attempts(session_id, sub_id, intent_id, provider, payment_method, status, amount)
          VALUES ($1, $2, $3, $4, $5, 'PENDING', $6)

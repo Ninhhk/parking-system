@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
     initiateCheckout,
@@ -66,6 +66,14 @@ export default function PaymentDetailsPage() {
     const [embedVersion, setEmbedVersion] = useState(0);
     const [regenerateCooldown, setRegenerateCooldown] = useState(0);
     const embedElementId = `payos-embed-${sessionid}-${embedVersion}`;
+    const isMountedRef = useRef(true);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
 
     const isLostTicketApplied = Boolean(checkout.session?.is_lost);
 
@@ -174,7 +182,8 @@ export default function PaymentDetailsPage() {
         return checkout.amount || 0;
     };
 
-    const applyIntentResult = (intentPayload) => {
+    const applyIntentResult = (intentPayload, shouldCancel = () => !isMountedRef.current) => {
+        if (shouldCancel()) return;
         const activeAttempt = intentPayload?.active_attempt || intentPayload || null;
 
         setPaymentIntent(activeAttempt);
@@ -189,8 +198,9 @@ export default function PaymentDetailsPage() {
         setEmbedVersion((v) => v + 1);
     };
 
-    const ensureCardIntent = async ({ forceNew = false }) => {
+    const ensureCardIntent = async ({ forceNew = false, shouldCancel = () => !isMountedRef.current }) => {
         if (!sessionid) return;
+        if (shouldCancel()) return;
         setCreatingIntent(true);
         try {
             const amount = getTotalAmount();
@@ -198,11 +208,16 @@ export default function PaymentDetailsPage() {
             const intent = forceNew
                 ? await regeneratePaymentIntent(sessionid, key, amount)
                 : await createPaymentIntent(sessionid, key, amount);
-            applyIntentResult(intent);
+            if (shouldCancel()) return;
+            applyIntentResult(intent, shouldCancel);
         } catch (err) {
-            toast.error(err.response?.data?.message || "Failed to prepare payment intent");
+            if (!shouldCancel()) {
+                toast.error(err.response?.data?.message || "Failed to prepare payment intent");
+            }
         } finally {
-            setCreatingIntent(false);
+            if (!shouldCancel()) {
+                setCreatingIntent(false);
+            }
         }
     };
 
@@ -218,9 +233,9 @@ export default function PaymentDetailsPage() {
 
                 const currentStatus = statusResult?.intent_status || statusResult?.status || "NOT_FOUND";
                 if (statusResult?.active_attempt) {
-                    applyIntentResult(statusResult);
+                    applyIntentResult(statusResult, () => isCancelled || !isMountedRef.current);
                 } else if (currentStatus === "NOT_FOUND") {
-                    await ensureCardIntent({ forceNew: false });
+                    await ensureCardIntent({ forceNew: false, shouldCancel: () => isCancelled || !isMountedRef.current });
                 }
             } catch (err) {
                 if (!isCancelled) {

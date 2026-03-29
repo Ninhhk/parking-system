@@ -40,6 +40,12 @@ jest.mock("../../services/paymentIntent.service", () => ({
     processWebhook: jest.fn(),
 }));
 
+jest.mock("../../config/constants", () => ({
+    PAYOS_DEFAULT_RETURN_URL: "http://localhost:3000/employee/checkout",
+    PAYOS_DEFAULT_CANCEL_URL: "http://localhost:3000/employee/checkout",
+    PAYMENT_INTENT_V2_ENABLED: true,
+}));
+
 const checkoutService = require("../../services/checkout.service");
 const sessionRepo = require("../../repositories/session.repo");
 const attemptRepo = require("../../repositories/paymentAttempt.repo");
@@ -47,10 +53,12 @@ const ledgerRepo = require("../../repositories/paymentLedger.repo");
 const payosClient = require("../../services/payos.client");
 const feeCalculationService = require("../../services/feeCalculation.service");
 const paymentIntentService = require("../../services/paymentIntent.service");
+const constants = require("../../config/constants");
 
 describe("checkout service", () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        constants.PAYMENT_INTENT_V2_ENABLED = true;
         mockConnect.mockReturnValue({
             query: jest.fn().mockResolvedValue({ rows: [] }),
             release: jest.fn(),
@@ -132,5 +140,53 @@ describe("checkout service", () => {
         expect(first.ok).toBe(true);
         expect(second.ok).toBe(true);
         expect(paymentIntentService.processWebhook).toHaveBeenCalledTimes(2);
+    });
+
+    it("falls back to legacy createIntent when PAYMENT_INTENT_V2_ENABLED is false", async () => {
+        constants.PAYMENT_INTENT_V2_ENABLED = false;
+        sessionRepo.getSessionForCheckout.mockResolvedValue({
+            session_id: 1,
+            time_out: null,
+            time_in: "2026-03-28T10:00:00.000Z",
+        });
+        feeCalculationService.calculateAndValidateFee.mockReturnValue({
+            success: true,
+            totalAmount: 20000,
+            serviceFee: 20000,
+            penaltyFee: 0,
+            hours: 1,
+        });
+        attemptRepo.createAttempt.mockResolvedValue({ attempt_id: 10, status: "PENDING" });
+        payosClient.createPaymentLink.mockResolvedValue({
+            orderCode: 10,
+            checkoutUrl: "https://payos/checkout/10",
+            qrCode: "qr-10",
+            expiredAt: "2026-03-29T12:00:00.000Z",
+        });
+        attemptRepo.attachProviderIntent.mockResolvedValue({
+            attempt_id: 10,
+            provider_order_code: "10",
+            qr_code_url: "qr-10",
+            checkout_url: "https://payos/checkout/10",
+            expires_at: "2026-03-29T12:00:00.000Z",
+            status: "PENDING",
+        });
+
+        const result = await checkoutService.createIntent({ sessionId: 1, paymentMethod: "CARD" });
+
+        expect(result.intent).toBeNull();
+        expect(result.active_attempt).toEqual(expect.objectContaining({ attempt_id: 10 }));
+        expect(payosClient.createPaymentLink).toHaveBeenCalled();
+    });
+
+    it("falls back to legacy status when PAYMENT_INTENT_V2_ENABLED is false", async () => {
+        constants.PAYMENT_INTENT_V2_ENABLED = false;
+        attemptRepo.getLatestBySession.mockResolvedValue({ attempt_id: 10, status: "PENDING" });
+
+        const result = await checkoutService.getPaymentStatus({ sessionId: 1 });
+
+        expect(result.status).toBe("PENDING");
+        expect(result.intent).toBeNull();
+        expect(result.active_attempt).toEqual(expect.objectContaining({ attempt_id: 10 }));
     });
 });

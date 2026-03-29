@@ -84,7 +84,7 @@ exports.updateIntentStatus = async (
          RETURNING *`,
         [
             status,
-            amount || null,
+            amount ?? null,
             providerIntentId || null,
             providerOrderCode || null,
             checkoutUrl || null,

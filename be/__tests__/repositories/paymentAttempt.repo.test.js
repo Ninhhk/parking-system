@@ -30,16 +30,20 @@ describe("paymentAttempt repo intent relation contracts", () => {
         );
     });
 
-    it("createAttempt rejects missing intentId", async () => {
-        await expect(
-            paymentAttemptRepo.createAttempt({
-                sessionId: 1,
-                subId: null,
-                provider: "PAYOS",
-                paymentMethod: "CARD",
-                amount: 12000,
-            })
-        ).rejects.toThrow("intentId is required");
+    it("createAttempt supports null intentId for legacy checkout flow", async () => {
+        await paymentAttemptRepo.createAttempt({
+            sessionId: 1,
+            subId: null,
+            intentId: null,
+            provider: "PAYOS",
+            paymentMethod: "CARD",
+            amount: 12000,
+        });
+
+        expect(mockPoolQuery).toHaveBeenCalledWith(
+            expect.stringContaining("INSERT INTO payment_attempts"),
+            [1, null, null, "PAYOS", "CARD", 12000]
+        );
     });
 
     it("getActiveAttemptByIntentId filters active statuses", async () => {

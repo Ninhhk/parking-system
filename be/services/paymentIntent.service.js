@@ -147,11 +147,24 @@ exports.createOrReuseIntent = async ({
             },
             client
         );
+
+        await paymentAttemptRepo.attachProviderIntent(
+            {
+                attemptId: attempt.attempt_id,
+                providerOrderCode: String(attempt.attempt_id),
+                qrCodeUrl: null,
+                checkoutUrl: null,
+                expiresAt: null,
+            },
+            client
+        );
+
         pending = {
             amount,
             feeResult,
             intentId: intent.intent_id,
             attemptId: attempt.attempt_id,
+            providerOrderCode: String(attempt.attempt_id),
             sessionId,
             paymentMethod,
             idempotencyKey:
@@ -174,7 +187,7 @@ exports.createOrReuseIntent = async ({
             buildPayOSPayload({
                 sessionId: pending.sessionId,
                 amount: pending.amount,
-                orderCode: Number(pending.attemptId),
+                orderCode: Number(pending.providerOrderCode),
             }),
             { idempotencyKey: pending.idempotencyKey }
         );
@@ -213,7 +226,7 @@ exports.createOrReuseIntent = async ({
         const attached = await paymentAttemptRepo.attachProviderIntent(
             {
                 attemptId: pending.attemptId,
-                providerOrderCode: String(link.orderCode || pending.attemptId),
+                providerOrderCode: String(link.orderCode || pending.providerOrderCode || pending.attemptId),
                 qrCodeUrl: link.qrCode || null,
                 checkoutUrl: link.checkoutUrl || null,
                 expiresAt: link.expiredAt || null,
