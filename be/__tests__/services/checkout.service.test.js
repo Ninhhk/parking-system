@@ -118,8 +118,16 @@ describe("checkout service", () => {
             .mockResolvedValueOnce({ ok: true, replay: false })
             .mockResolvedValueOnce({ ok: true, replay: true });
 
-        const first = await checkoutService.finalizeFromWebhook({ code: "00", success: true, data: { orderCode: 123 } });
-        const second = await checkoutService.finalizeFromWebhook({ code: "00", success: true, data: { orderCode: 123 } });
+        const first = await checkoutService.finalizeFromWebhook({
+            code: "00",
+            success: true,
+            data: { orderCode: 123, code: "00" },
+        });
+        const second = await checkoutService.finalizeFromWebhook({
+            code: "00",
+            success: true,
+            data: { orderCode: 123, code: "00" },
+        });
 
         expect(first.ok).toBe(true);
         expect(second.ok).toBe(true);
