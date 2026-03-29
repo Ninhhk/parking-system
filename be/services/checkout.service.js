@@ -114,12 +114,13 @@ exports.confirmCashCheckout = async ({ sessionId, totalAmount, isLost, paymentMe
 };
 
 exports.finalizeFromWebhook = async (payload) => {
-    const verified = payosClient.verifyWebhook(payload);
-    const data = verified.data || {};
-    const isSuccessEvent =
-        verified.success === true &&
-        String(verified.code || "") === "00" &&
-        String(data.code || "00") === "00";
+    const verified = await payosClient.verifyWebhook(payload);
+    const data = verified && verified.data ? verified.data : verified || {};
+
+    const topLevelCode = String(payload?.code || "");
+    const topLevelSuccess = payload?.success === true;
+    const dataCode = String(data.code || "00");
+    const isSuccessEvent = (topLevelSuccess || topLevelCode === "00") && (topLevelCode === "" || topLevelCode === "00") && dataCode === "00";
     const orderCode = String(data.orderCode || "");
 
     if (!orderCode) {

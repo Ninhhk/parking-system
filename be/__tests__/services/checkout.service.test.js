@@ -142,7 +142,12 @@ describe("checkout service", () => {
         };
         mockConnect.mockReturnValue(dbClient);
 
-        payosClient.verifyWebhook.mockReturnValue({ data: { orderCode: 123, reference: "REF123" } });
+        payosClient.verifyWebhook.mockResolvedValue({
+            orderCode: 123,
+            reference: "REF123",
+            code: "00",
+            desc: "success",
+        });
 
         attemptRepo.getByProviderOrderCode
             .mockResolvedValueOnce({
@@ -172,8 +177,16 @@ describe("checkout service", () => {
         sessionRepo.finalizeSessionIfOpen.mockResolvedValue({ session_id: 1, time_out: new Date().toISOString() });
         ledgerRepo.insertSettledPayment.mockResolvedValue({ payment_id: 99 });
 
-        const first = await checkoutService.finalizeFromWebhook({ code: "00", success: true, data: { orderCode: 123 } });
-        const second = await checkoutService.finalizeFromWebhook({ code: "00", success: true, data: { orderCode: 123 } });
+        const first = await checkoutService.finalizeFromWebhook({
+            code: "00",
+            success: true,
+            data: { orderCode: 123, code: "00" },
+        });
+        const second = await checkoutService.finalizeFromWebhook({
+            code: "00",
+            success: true,
+            data: { orderCode: 123, code: "00" },
+        });
 
         expect(first.ok).toBe(true);
         expect(second.ok).toBe(true);
