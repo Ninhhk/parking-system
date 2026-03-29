@@ -108,10 +108,22 @@ This repo now includes a PostgreSQL service inside `docker-compose.yml` and sche
 
 ## What is included
 - `postgres` service (`postgres:16-alpine`) with healthcheck and persistent volume.
+- `db-migrate` service that replays all SQL files in `db/init/*.sql` on each startup.
 - Backend default DB host changed to service DNS: `postgres`.
-- Auto schema init scripts mounted to `/docker-entrypoint-initdb.d`:
+- Docker Postgres host port is mapped to `55432` by default to avoid conflicts with local PostgreSQL.
+- Bootstrap init scripts mounted to `/docker-entrypoint-initdb.d` (first DB volume creation only):
 	- `db/init/001_schema.sql`
 	- `db/init/002_seed.sql`
+	- `db/init/003_payment_attempts.sql`
+
+## DBeaver / JDBC connection (Docker Postgres)
+Use these values when connecting to the database running in Docker:
+- JDBC URL: `jdbc:postgresql://localhost:55432/parking_lot`
+- Host: `localhost`
+- Port: `55432`
+- Database: `parking_lot`
+- Username: `admin`
+- Password: `password123`
 
 ## First startup
 ```powershell
@@ -122,12 +134,21 @@ docker compose up -d --build
 ```powershell
 docker compose ps
 docker compose logs postgres --tail 100
+docker compose logs db-migrate --tail 100
 docker compose logs backend --tail 100
 ```
 
 ## Important behavior
-- Init scripts run **only on first database volume creation**.
-- If you change schema SQL and want it applied from scratch, reset volume.
+- PostgreSQL init scripts run **only on first database volume creation**.
+- `db-migrate` runs idempotent SQL (`db/init/*.sql`) on every `docker compose up`.
+- For additive schema updates (new tables/indexes/constraints), no volume reset is required.
+- Keep migration SQL idempotent (`IF NOT EXISTS`, safe `DROP IF EXISTS`) to avoid failures.
+
+## Apply latest migration without full restart
+```powershell
+docker compose up -d db-migrate
+docker compose logs db-migrate --tail 100
+```
 
 ## Reset DB (fresh re-bootstrap)
 ```powershell
