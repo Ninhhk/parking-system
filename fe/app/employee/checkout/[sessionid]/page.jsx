@@ -617,6 +617,7 @@ export default function PaymentDetailsPage() {
 
                                 {!creatingIntent && paymentIntent?.checkout_url && (
                                     <PayOSEmbed
+                                        className="min-h-[80vh] md:min-h-[72vh]"
                                         elementId={embedElementId}
                                         checkoutUrl={paymentIntent.checkout_url}
                                         returnUrl={typeof window !== "undefined" ? window.location.href : undefined}

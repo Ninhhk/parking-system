@@ -37,6 +37,7 @@ export default function PayOSEmbed({
     onSuccess,
     onExit,
     onError,
+    className = "",
 }) {
     const [loading, setLoading] = useState(false);
     const instanceRef = useRef(null);
@@ -61,6 +62,10 @@ export default function PayOSEmbed({
             try {
                 const sdk = await ensurePayOSScript();
                 if (disposed) return;
+                const mountEl = document.getElementById(elementId);
+                if (!mountEl) {
+                    throw new Error(`PayOS mount element not found: ${elementId}`);
+                }
 
                 const config = {
                     RETURN_URL: returnUrl || window.location.href,
@@ -93,7 +98,10 @@ export default function PayOSEmbed({
             disposed = true;
             if (instanceRef.current?.exit) {
                 try {
-                    instanceRef.current.exit();
+                    const mountEl = document.getElementById(elementId);
+                    if (mountEl) {
+                        instanceRef.current.exit();
+                    }
                 } catch (e) {
                     // noop
                 }
@@ -103,9 +111,48 @@ export default function PayOSEmbed({
     }, [checkoutUrl, elementId, returnUrl]);
 
     return (
-        <div className="border rounded-md bg-white p-3">
-            {loading && <p className="text-sm text-gray-600 mb-2">Loading embedded checkout...</p>}
-            <div id={elementId} className="min-h-[380px]" />
+        <div className={`payos-embed-shell w-full border rounded-md bg-white overflow-hidden ${className}`}>
+            {loading && <p className="text-sm text-gray-600 px-3 py-2">Loading embedded checkout...</p>}
+            <div id={elementId} className="payos-embed-target" />
+            <style jsx>{`
+                .payos-embed-shell {
+                    display: flex;
+                    flex-direction: column;
+                    height: 100%;
+                }
+
+                .payos-embed-target {
+                    width: 100%;
+                    flex: 1 1 auto;
+                    min-height: 620px;
+                }
+
+                @supports (min-height: 100dvh) {
+                    .payos-embed-target {
+                        min-height: 80dvh;
+                    }
+                }
+
+                @media (min-width: 768px) {
+                    .payos-embed-target {
+                        min-height: 72vh;
+                    }
+
+                    @supports (min-height: 100dvh) {
+                        .payos-embed-target {
+                            min-height: 72dvh;
+                        }
+                    }
+                }
+
+                .payos-embed-target :global(iframe) {
+                    display: block;
+                    width: 100% !important;
+                    height: 100% !important;
+                    min-height: 100% !important;
+                    border: 0;
+                }
+            `}</style>
         </div>
     );
 }
