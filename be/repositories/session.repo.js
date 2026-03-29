@@ -16,6 +16,23 @@ exports.getSessionForCheckout = async (sessionId, client = pool) => {
     return result.rows[0] || null;
 };
 
+exports.getSessionForCheckoutForUpdate = async (sessionId, client = pool) => {
+    const result = await client.query(
+        `SELECT
+            ps.*,
+            fc.service_fee,
+            fc.penalty_fee
+         FROM parkingsessions ps
+         LEFT JOIN feeconfigs fc
+            ON fc.vehicle_type = ps.vehicle_type
+           AND fc.ticket_type = CASE WHEN ps.is_monthly THEN 'monthly' ELSE 'daily' END
+         WHERE ps.session_id = $1
+         FOR UPDATE`,
+        [sessionId]
+    );
+    return result.rows[0] || null;
+};
+
 exports.finalizeSessionIfOpen = async ({ sessionId, totalAmount, isLost }, client) => {
     const result = await client.query(
         `UPDATE parkingsessions

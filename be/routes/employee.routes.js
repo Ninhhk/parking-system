@@ -35,6 +35,10 @@ router.post("/parking/entry", sessionsController.checkInVehicle);
 router.get("/parking/exit/:session_id", sessionsController.initiateCheckout);
 router.post("/parking/exit/confirm", sessionsController.confirmCheckout);
 router.post("/parking/exit/:session_id/payment-intents", employeePaymentController.createIntent);
+router.post(
+    "/parking/exit/:session_id/payment-intents/regenerate",
+    employeePaymentController.regenerateIntent
+);
 router.get("/parking/exit/:session_id/payment-status", employeePaymentController.getPaymentStatus);
 
 // Profile routes
