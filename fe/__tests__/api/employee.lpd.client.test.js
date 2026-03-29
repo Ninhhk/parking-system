@@ -1,9 +1,8 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { detectLicensePlate, isLPDServiceAvailable } from '../api/employee.lpd.client';
-import api from '../api/client.config';
+import { detectLicensePlate, isLPDServiceAvailable } from '@/app/api/employee.lpd.client';
+import api from '@/app/api/client.config';
 
 // Mock the api client
-jest.mock('../api/client.config');
+jest.mock('@/app/api/client.config');
 
 describe('Employee LPD Client', () => {
     beforeEach(() => {

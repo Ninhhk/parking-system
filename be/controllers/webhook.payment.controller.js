@@ -3,24 +3,24 @@ const checkoutService = require("../services/checkout.service");
 exports.payosWebhook = async (req, res) => {
     try {
         const result = await checkoutService.finalizeFromWebhook(req.body);
-        console.log("[payos-webhook] processed", {
-            orderCode: req.body?.data?.orderCode,
-            code: req.body?.code,
-            success: req.body?.success,
-            replay: result?.replay,
-            reason: result?.reason || null,
-        });
-        return res.status(200).json({ success: true });
+        console.log(
+            JSON.stringify({
+                event: "payos_webhook_received",
+                order_code: req.body?.data?.orderCode || null,
+                webhook_event_id: req.body?.data?.reference || req.body?.signature || null,
+                result,
+            })
+        );
+        return res.status(200).json({ success: true, data: result });
     } catch (error) {
-        console.error("[payos-webhook] invalid", {
-            orderCode: req.body?.data?.orderCode,
-            code: req.body?.code,
-            success: req.body?.success,
-            error: error?.message,
-        });
-        return res.status(400).json({
-            success: false,
-            message: "Invalid webhook",
-        });
+        console.log(
+            JSON.stringify({
+                event: "payos_webhook_invalid",
+                order_code: req.body?.data?.orderCode || null,
+                webhook_event_id: req.body?.data?.reference || req.body?.signature || null,
+                error: error.message,
+            })
+        );
+        return res.status(200).json({ success: true, data: { ok: true, replay: true, reason: "INVALID_WEBHOOK" } });
     }
 };

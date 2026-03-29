@@ -42,6 +42,9 @@ const PAYOS_DEFAULT_RETURN_URL =
 const PAYOS_DEFAULT_CANCEL_URL =
     process.env.PAYOS_CANCEL_URL || 'http://localhost:3000/employee/checkout';
 
+// Feature Flags
+const PAYMENT_INTENT_V2_ENABLED = String(process.env.PAYMENT_INTENT_V2_ENABLED || 'true') === 'true';
+
 module.exports = {
     // Session
     SESSION_MAX_AGE_HOURS,
@@ -77,4 +80,7 @@ module.exports = {
     // PayOS
     PAYOS_DEFAULT_RETURN_URL,
     PAYOS_DEFAULT_CANCEL_URL,
+
+    // Feature Flags
+    PAYMENT_INTENT_V2_ENABLED,
 };

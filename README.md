@@ -160,3 +160,44 @@ docker compose up -d --build
 ```powershell
 docker exec -it parking-lot-postgres psql -U admin -d parking_lot
 ```
+
+---
+
+# Payment Intent V2 Rollout
+
+## Feature flag
+
+- Env key: `PAYMENT_INTENT_V2_ENABLED`
+- Default: `true`
+
+Set in `.env` (or compose env):
+
+```env
+PAYMENT_INTENT_V2_ENABLED=true
+```
+
+## Backfill migration
+
+Migration file: `db/init/005_payment_intents_backfill.sql`
+
+Apply and verify:
+
+```powershell
+docker compose up -d db-migrate
+docker compose logs db-migrate --tail 100
+docker exec parking-lot-postgres psql -U admin -d parking_lot -c "SELECT session_id FROM payment_intents GROUP BY session_id HAVING COUNT(*) FILTER (WHERE status IN ('REQUIRES_PAYMENT_METHOD','PENDING')) > 1;"
+```
+
+Expected: zero rows.
+
+## Comparison checklist
+
+- `create_intent` and `reuse_intent` logs appear with `session_id/intent_id/attempt_id`
+- webhook logs include `order_code` and `webhook_event_id`
+- payment status on refresh resumes same active intent
+
+## Rollback
+
+1. Set `PAYMENT_INTENT_V2_ENABLED=false`
+2. Restart backend container
+3. Keep webhook endpoint online to avoid dropped provider callbacks (webhook finalize path remains active)
