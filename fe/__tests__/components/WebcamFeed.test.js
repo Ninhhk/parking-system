@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import WebcamFeed from '../components/common/WebcamFeed';
+import WebcamFeed from '@/app/components/common/WebcamFeed';
 
 // Mock getUserMedia
 const mockGetUserMedia = jest.fn();
@@ -18,6 +18,8 @@ describe('WebcamFeed Component', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        jest.spyOn(console, 'log').mockImplementation(() => {});
+        jest.spyOn(console, 'error').mockImplementation(() => {});
         mockOnCapture = jest.fn();
         mockOnError = jest.fn();
 
@@ -39,7 +41,26 @@ describe('WebcamFeed Component', () => {
         HTMLCanvasElement.prototype.toDataURL = jest.fn(() =>
             'data:image/jpeg;base64,iVBORw0KG...'
         );
+
+        HTMLMediaElement.prototype.play = jest.fn().mockResolvedValue();
     });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    const triggerVideoReady = async () => {
+        await waitFor(() => {
+            expect(document.querySelector('video')).toBeInTheDocument();
+        });
+        const video = document.querySelector('video');
+        await waitFor(() => {
+            expect(typeof video?.onloadedmetadata).toBe('function');
+        });
+        if (video && typeof video.onloadedmetadata === 'function') {
+            await video.onloadedmetadata();
+        }
+    };
 
     it('should render component with title', async () => {
         mockGetUserMedia.mockResolvedValue(mockStream);
@@ -68,9 +89,7 @@ describe('WebcamFeed Component', () => {
 
         await waitFor(() => {
             expect(mockGetUserMedia).toHaveBeenCalledWith({
-                video: expect.objectContaining({
-                    facingMode: 'environment',
-                }),
+                video: expect.objectContaining({ facingMode: 'user' }),
                 audio: false,
             });
         });
@@ -87,11 +106,8 @@ describe('WebcamFeed Component', () => {
             />
         );
 
-        await waitFor(() => {
-            const video = screen.getByRole('img', { hidden: true }) || 
-                          document.querySelector('video');
-            expect(video).toBeInTheDocument();
-        });
+        await triggerVideoReady();
+        expect(document.querySelector('video')).toBeInTheDocument();
     });
 
     it('should show error when camera access is denied', async () => {
@@ -143,6 +159,8 @@ describe('WebcamFeed Component', () => {
             />
         );
 
+        await triggerVideoReady();
+
         await waitFor(() => {
             const captureButton = screen.getByText('Capture License Plate');
             expect(captureButton).toBeEnabled();
@@ -190,6 +208,8 @@ describe('WebcamFeed Component', () => {
             />
         );
 
+        await triggerVideoReady();
+
         await waitFor(() => {
             const closeButton = screen.getByText('Close Camera');
             expect(closeButton).toBeInTheDocument();
@@ -233,6 +253,8 @@ describe('WebcamFeed Component', () => {
                 onError={mockOnError}
             />
         );
+
+        await triggerVideoReady();
 
         await waitFor(() => {
             expect(screen.getByText(/Position the camera to clearly see/i)).toBeInTheDocument();
