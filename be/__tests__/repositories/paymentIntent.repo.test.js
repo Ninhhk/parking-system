@@ -34,10 +34,6 @@ describe("paymentIntent repo query contracts", () => {
             provider: "PAYOS",
             status: "PENDING",
             amount: 20000,
-            providerIntentId: "pi_1",
-            providerOrderCode: "oc_1",
-            checkoutUrl: "https://checkout",
-            expiresAt: "2026-03-29T10:00:00Z",
             metadata: { hello: "world" },
         });
 
@@ -48,10 +44,6 @@ describe("paymentIntent repo query contracts", () => {
                 "PAYOS",
                 "PENDING",
                 20000,
-                "pi_1",
-                "oc_1",
-                "https://checkout",
-                "2026-03-29T10:00:00Z",
                 JSON.stringify({ hello: "world" }),
             ]
         );
@@ -74,16 +66,12 @@ describe("paymentIntent repo query contracts", () => {
         await paymentIntentRepo.updateIntentStatus({
             intentId: 7,
             status: "PAID",
-            providerIntentId: "pi_1",
-            providerOrderCode: "oc_1",
-            checkoutUrl: "https://checkout",
-            expiresAt: "2026-03-29T10:00:00Z",
             metadata: { foo: "bar" },
         });
 
         expect(mockPoolQuery).toHaveBeenCalledWith(
             expect.stringContaining("UPDATE payment_intents"),
-            ["PAID", null, "pi_1", "oc_1", "https://checkout", "2026-03-29T10:00:00Z", JSON.stringify({ foo: "bar" }), 7]
+            ["PAID", null, JSON.stringify({ foo: "bar" }), 7]
         );
     });
 

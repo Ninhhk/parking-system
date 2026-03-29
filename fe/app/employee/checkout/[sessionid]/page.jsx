@@ -234,7 +234,7 @@ export default function PaymentDetailsPage() {
                 const currentStatus = statusResult?.intent_status || statusResult?.status || "NOT_FOUND";
                 if (statusResult?.active_attempt) {
                     applyIntentResult(statusResult, () => isCancelled || !isMountedRef.current);
-                } else if (currentStatus === "NOT_FOUND") {
+                } else if (["NOT_FOUND", "REQUIRES_PAYMENT_METHOD", "FAILED", "EXPIRED"].includes(currentStatus)) {
                     await ensureCardIntent({ forceNew: false, shouldCancel: () => isCancelled || !isMountedRef.current });
                 }
             } catch (err) {

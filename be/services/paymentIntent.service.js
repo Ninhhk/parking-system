@@ -240,9 +240,6 @@ exports.createOrReuseIntent = async ({
                 intentId: pending.intentId,
                 status: "PENDING",
                 amount: pending.amount,
-                providerOrderCode: attached.provider_order_code,
-                checkoutUrl: attached.checkout_url,
-                expiresAt: attached.expires_at,
                 metadata: {
                     paymentMethod: pending.paymentMethod,
                     idempotencyKey: pending.idempotencyKey,

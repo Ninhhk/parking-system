@@ -5,10 +5,6 @@ CREATE TABLE IF NOT EXISTS payment_intents (
     status VARCHAR(40) NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
     active_attempt_id BIGINT,
-    provider_intent_id VARCHAR(100),
-    provider_order_code VARCHAR(100),
-    checkout_url TEXT,
-    expires_at TIMESTAMP,
     metadata JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -93,14 +89,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_intents_active_session
     ON payment_intents(session_id)
     WHERE status IN ('REQUIRES_PAYMENT_METHOD', 'PENDING');
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_intents_provider_provider_order_code
-    ON payment_intents(provider, provider_order_code)
-    WHERE provider_order_code IS NOT NULL;
-
-DROP INDEX IF EXISTS uq_payment_intents_provider_order_code;
-
 CREATE INDEX IF NOT EXISTS idx_payment_intents_session_status_created
     ON payment_intents(session_id, status, created_at DESC);
+
+ALTER TABLE payment_intents
+    DROP COLUMN IF EXISTS provider_intent_id,
+    DROP COLUMN IF EXISTS provider_order_code,
+    DROP COLUMN IF EXISTS checkout_url,
+    DROP COLUMN IF EXISTS expires_at;
+
+DROP INDEX IF EXISTS uq_payment_intents_provider_provider_order_code;
+DROP INDEX IF EXISTS uq_payment_intents_provider_order_code;
 
 ALTER TABLE payment_attempts
     ADD COLUMN IF NOT EXISTS intent_id BIGINT;

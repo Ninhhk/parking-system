@@ -13,9 +13,6 @@ WITH candidate_attempts AS (
         provider,
         status,
         amount,
-        provider_order_code,
-        checkout_url,
-        expires_at,
         metadata,
         created_at,
         updated_at
@@ -32,9 +29,6 @@ WITH candidate_attempts AS (
             ELSE 'REQUIRES_PAYMENT_METHOD'
         END,
         c.amount,
-        c.provider_order_code,
-        c.checkout_url,
-        c.expires_at,
         jsonb_build_object('backfilled', true, 'source_attempt_id', c.attempt_id),
         c.created_at,
         c.updated_at
