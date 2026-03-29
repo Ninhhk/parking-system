@@ -48,9 +48,20 @@ export async function confirmCheckout(sessionId, paymentMethod) {
     return res.data;
 }
 
-export async function createPaymentIntent(sessionId) {
+export async function createPaymentIntent(sessionId, idempotencyKey, amount) {
     const res = await api.post(`/employee/parking/exit/${sessionId}/payment-intents`, {
         payment_method: "CARD",
+        idempotency_key: idempotencyKey,
+        ...(Number.isFinite(amount) ? { amount } : {}),
+    });
+    return res.data.data;
+}
+
+export async function regeneratePaymentIntent(sessionId, idempotencyKey, amount) {
+    const res = await api.post(`/employee/parking/exit/${sessionId}/payment-intents/regenerate`, {
+        idempotency_key: idempotencyKey,
+        force_new: true,
+        ...(Number.isFinite(amount) ? { amount } : {}),
     });
     return res.data.data;
 }

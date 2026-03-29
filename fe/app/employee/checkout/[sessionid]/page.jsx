@@ -7,6 +7,7 @@ import {
     reportLostTicket,
     deleteLostTicket,
     createPaymentIntent,
+    regeneratePaymentIntent,
     fetchPaymentStatus,
 } from "@/app/api/employee.client";
 import PageHeader from "@/app/components/common/PageHeader";
@@ -22,6 +23,7 @@ import {
     FaIdCard,
     FaExclamationTriangle,
 } from "react-icons/fa";
+import PayOSEmbed from "@/app/components/payment/PayOSEmbed";
 
 const CARD_STATUS_LABELS = {
     PENDING: "Pending payment",
@@ -29,7 +31,10 @@ const CARD_STATUS_LABELS = {
     FAILED: "Payment failed",
     EXPIRED: "Payment expired",
     NOT_FOUND: "No active payment intent",
+    REQUIRES_PAYMENT_METHOD: "Requires payment method",
 };
+
+const makeIdempotencyKey = (prefix, sessionId) => `${prefix}-${sessionId}-${Date.now()}`;
 
 export default function PaymentDetailsPage() {
     const params = useParams();
@@ -58,8 +63,10 @@ export default function PaymentDetailsPage() {
     const [paymentIntent, setPaymentIntent] = useState(null);
     const [cardStatus, setCardStatus] = useState("PENDING");
     const [creatingIntent, setCreatingIntent] = useState(false);
+    const [embedVersion, setEmbedVersion] = useState(0);
+    const [regenerateCooldown, setRegenerateCooldown] = useState(0);
+    const embedElementId = `payos-embed-${sessionid}-${embedVersion}`;
 
-    const isCardStatusTerminal = cardStatus === "PAID" || cardStatus === "FAILED" || cardStatus === "EXPIRED";
     const isLostTicketApplied = Boolean(checkout.session?.is_lost);
 
     useEffect(() => {
@@ -100,6 +107,14 @@ export default function PaymentDetailsPage() {
         }, 1000); // update every second
         return () => clearInterval(interval);
     }, [checkout.session]);
+
+    useEffect(() => {
+        if (regenerateCooldown <= 0) return undefined;
+        const timer = setInterval(() => {
+            setRegenerateCooldown((prev) => Math.max(0, prev - 1));
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [regenerateCooldown]);
 
     const handleConfirmPayment = async () => {
         if (!checkout.session) {
@@ -159,51 +174,83 @@ export default function PaymentDetailsPage() {
         return checkout.amount || 0;
     };
 
+    const applyIntentResult = (intentPayload) => {
+        const activeAttempt = intentPayload?.active_attempt || intentPayload || null;
+
+        setPaymentIntent(activeAttempt);
+        setCheckout((prev) => ({
+            ...prev,
+            amount: intentPayload?.amount ?? prev.amount,
+            serviceFee: intentPayload?.service_fee ?? prev.serviceFee,
+            penaltyFee: intentPayload?.penalty_fee ?? prev.penaltyFee,
+            hours: intentPayload?.hours ?? prev.hours,
+        }));
+        setCardStatus(intentPayload?.intent_status || intentPayload?.status || "PENDING");
+        setEmbedVersion((v) => v + 1);
+    };
+
+    const ensureCardIntent = async ({ forceNew = false }) => {
+        if (!sessionid) return;
+        setCreatingIntent(true);
+        try {
+            const amount = getTotalAmount();
+            const key = makeIdempotencyKey(forceNew ? "regen" : "create", sessionid);
+            const intent = forceNew
+                ? await regeneratePaymentIntent(sessionid, key, amount)
+                : await createPaymentIntent(sessionid, key, amount);
+            applyIntentResult(intent);
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Failed to prepare payment intent");
+        } finally {
+            setCreatingIntent(false);
+        }
+    };
+
     useEffect(() => {
         if (!sessionid || !checkout.session || paymentMethod !== "CARD") return;
-        if (cardStatus === "PAID") return;
-        if (!getTotalAmount() || creatingIntent) return;
-
         let isCancelled = false;
 
-        const createIntent = async () => {
+        const resumeOrCreate = async () => {
             setCreatingIntent(true);
             try {
-                const intent = await createPaymentIntent(sessionid);
+                const statusResult = await fetchPaymentStatus(sessionid);
                 if (isCancelled) return;
-                setPaymentIntent(intent);
-                setCheckout((prev) => ({
-                    ...prev,
-                    amount: intent?.amount ?? prev.amount,
-                    serviceFee: intent?.service_fee ?? prev.serviceFee,
-                    penaltyFee: intent?.penalty_fee ?? prev.penaltyFee,
-                    hours: intent?.hours ?? prev.hours,
-                }));
-                setCardStatus(intent?.status || "PENDING");
+
+                const currentStatus = statusResult?.intent_status || statusResult?.status || "NOT_FOUND";
+                if (statusResult?.active_attempt) {
+                    applyIntentResult(statusResult);
+                } else if (currentStatus === "NOT_FOUND") {
+                    await ensureCardIntent({ forceNew: false });
+                }
             } catch (err) {
                 if (!isCancelled) {
-                    toast.error(err.response?.data?.message || "Failed to create payment QR");
+                    toast.error(err.response?.data?.message || "Failed to resume payment status");
                 }
             } finally {
-                if (!isCancelled) setCreatingIntent(false);
+                if (!isCancelled) {
+                    setCreatingIntent(false);
+                }
             }
         };
 
-        createIntent();
-
+        resumeOrCreate();
         return () => {
             isCancelled = true;
         };
-    }, [sessionid, paymentMethod, checkout.session, checkout.amount]);
+    }, [sessionid, paymentMethod, checkout.session]);
 
     useEffect(() => {
-        if (paymentMethod !== "CARD" || !paymentIntent?.attempt_id) return;
+        if (paymentMethod !== "CARD" || !sessionid || !checkout.session) return undefined;
 
         const timer = setInterval(async () => {
             try {
                 const statusResult = await fetchPaymentStatus(sessionid);
-                const nextStatus = statusResult?.status || "PENDING";
+                const nextStatus = statusResult?.intent_status || statusResult?.status || "PENDING";
                 setCardStatus(nextStatus);
+
+                if (statusResult?.active_attempt && statusResult?.active_attempt?.attempt_id !== paymentIntent?.attempt_id) {
+                    setPaymentIntent(statusResult.active_attempt);
+                }
 
                 if (nextStatus === "PAID") {
                     clearInterval(timer);
@@ -216,16 +263,14 @@ export default function PaymentDetailsPage() {
                         payment_method: "CARD",
                     });
                     router.replace(`/employee/checkout/success?${params.toString()}`);
-                } else if (nextStatus === "FAILED" || nextStatus === "EXPIRED") {
-                    clearInterval(timer);
                 }
             } catch (err) {
-                setCardStatus("PENDING");
+                // keep polling silently
             }
         }, 3000);
 
         return () => clearInterval(timer);
-    }, [paymentMethod, paymentIntent, sessionid, checkout.session, checkout.hours, liveHours]);
+    }, [paymentMethod, paymentIntent?.attempt_id, sessionid, checkout.session, checkout.hours, liveHours]);
 
     const formatDateTime = (dateStr) => {
         if (!dateStr) return "N/A";
@@ -534,43 +579,45 @@ export default function PaymentDetailsPage() {
                                 />
                             </div>
                         </div>
-                {paymentMethod === "CARD" && (
+                        {paymentMethod === "CARD" && (
                             <div className="mt-4 border rounded-lg p-4 bg-white">
-                                <h4 className="text-sm font-semibold text-gray-800 mb-2">PayOS QR Payment</h4>
-                                {creatingIntent && (
-                                    <p className="text-sm text-gray-600">Generating payment QR...</p>
-                                )}
-                                {!creatingIntent && paymentIntent?.checkout_url && (
-                                    <>
-                                        <p className="text-sm text-gray-700 mb-2">
-                                            Open checkout link or scan QR to complete payment.
-                                        </p>
-                                        <a
-                                            href={paymentIntent.checkout_url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-block text-sm text-blue-600 underline"
-                                        >
-                                            Open PayOS Checkout
-                                        </a>
-                                    </>
-                                )}
-                                <p className="text-xs text-gray-500 mt-2">Status: {cardStatus}</p>
-                                <p className="text-xs text-gray-600">
-                                    {CARD_STATUS_LABELS[cardStatus] || "Waiting for update"}
-                                </p>
-                                {isCardStatusTerminal && cardStatus !== "PAID" && (
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="text-sm font-semibold text-gray-800">PayOS Embedded Checkout</h4>
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            setCardStatus("PENDING");
-                                            setPaymentIntent(null);
+                                        disabled={creatingIntent || cardStatus === "PAID" || regenerateCooldown > 0}
+                                        onClick={async () => {
+                                            await ensureCardIntent({ forceNew: true });
+                                            setRegenerateCooldown(8);
                                         }}
-                                        className="mt-2 text-xs text-blue-600 underline"
+                                        className="text-xs text-blue-600 underline disabled:text-gray-400"
                                     >
-                                        Create new payment QR
+                                        {regenerateCooldown > 0
+                                            ? `Generate New QR (${regenerateCooldown}s)`
+                                            : "Generate New QR"}
                                     </button>
+                                </div>
+
+                                {creatingIntent && <p className="text-sm text-gray-600 mb-2">Generating payment QR...</p>}
+
+                                {!creatingIntent && paymentIntent?.checkout_url && (
+                                    <PayOSEmbed
+                                        elementId={embedElementId}
+                                        checkoutUrl={paymentIntent.checkout_url}
+                                        returnUrl={typeof window !== "undefined" ? window.location.href : undefined}
+                                        onError={(err) => {
+                                            toast.error(err?.message || "Failed to load embedded checkout");
+                                            setCardStatus("FAILED");
+                                        }}
+                                    />
                                 )}
+
+                                {!creatingIntent && !paymentIntent?.checkout_url && (
+                                    <p className="text-sm text-gray-600">Waiting for checkout URL...</p>
+                                )}
+
+                                <p className="text-xs text-gray-500 mt-2">Status: {cardStatus}</p>
+                                <p className="text-xs text-gray-600">{CARD_STATUS_LABELS[cardStatus] || "Waiting for update"}</p>
                             </div>
                         )}
                     </div>
