@@ -8,9 +8,9 @@ import Sidebar from "../components/employee/Sidebar";
  */
 export default function EmployeeLayout({ children }) {
         return (
-        <div style={{ display: "flex" }}>
+        <section style={{ display: "flex", flex: 1 }} className="flex-1 w-full h-full">
                 <Sidebar />
-                <div style={{ flex: 1, padding: 24 }}>{children}</div>
-        </div>
+                <div style={{ flex: 1, padding: 24, display: "flex", flexDirection: "column" }}>{children}</div>
+        </section>
     );
 }

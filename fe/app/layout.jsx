@@ -31,7 +31,7 @@ export default async function RootLayout({ children }) {
                 <UserProvider initialUser={initialUser}>
                     <ToastProvider />
                     <Header />
-                    <div>{children}</div>
+                    <section className="flex-1 flex flex-col w-full h-full">{children}</section>
                     <Footer />
                 </UserProvider>
             </body>

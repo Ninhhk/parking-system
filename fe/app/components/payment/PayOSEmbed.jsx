@@ -111,48 +111,12 @@ export default function PayOSEmbed({
     }, [checkoutUrl, elementId, returnUrl]);
 
     return (
-        <div className={`payos-embed-shell w-full border rounded-md bg-white overflow-hidden ${className}`}>
+        <div className={`flex flex-col h-full w-full border rounded-md bg-white overflow-hidden ${className}`}>
             {loading && <p className="text-sm text-gray-600 px-3 py-2">Loading embedded checkout...</p>}
-            <div id={elementId} className="payos-embed-target" />
-            <style jsx>{`
-                .payos-embed-shell {
-                    display: flex;
-                    flex-direction: column;
-                    height: 100%;
-                }
-
-                .payos-embed-target {
-                    width: 100%;
-                    flex: 1 1 auto;
-                    min-height: 620px;
-                }
-
-                @supports (min-height: 100dvh) {
-                    .payos-embed-target {
-                        min-height: 80dvh;
-                    }
-                }
-
-                @media (min-width: 768px) {
-                    .payos-embed-target {
-                        min-height: 72vh;
-                    }
-
-                    @supports (min-height: 100dvh) {
-                        .payos-embed-target {
-                            min-height: 72dvh;
-                        }
-                    }
-                }
-
-                .payos-embed-target :global(iframe) {
-                    display: block;
-                    width: 100% !important;
-                    height: 100% !important;
-                    min-height: 100% !important;
-                    border: 0;
-                }
-            `}</style>
+            <div 
+                id={elementId} 
+                className="w-full flex-1 flex flex-col min-h-[620px] md:min-h-[72vh] [&>iframe]:flex-1 [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:min-h-full [&>iframe]:border-0 [&>iframe]:block" 
+            />
         </div>
     );
 }
