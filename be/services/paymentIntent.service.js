@@ -5,7 +5,7 @@ const paymentAttemptRepo = require("../repositories/paymentAttempt.repo");
 const payosProvider = require("./payos.provider");
 const paymentLedgerRepo = require("../repositories/paymentLedger.repo");
 const { calculateAndValidateFee } = require("./feeCalculation.service");
-const { PAYOS_DEFAULT_RETURN_URL, PAYOS_DEFAULT_CANCEL_URL } = require("../config/constants");
+const { PAYOS_DEFAULT_RETURN_URL, PAYOS_DEFAULT_CANCEL_URL, PAYOS_QR_TTL_MINUTES } = require("../config/constants");
 const paymentMetrics = require("../observability/payment.metrics");
 
 const toAttemptProjection = (attempt) => {
@@ -38,12 +38,25 @@ const toIntentProjection = (intent) => {
     };
 };
 
-const buildPayOSPayload = ({ sessionId, amount, orderCode }) => ({
+const ttlMinutes = Number.isFinite(Number(PAYOS_QR_TTL_MINUTES)) && Number(PAYOS_QR_TTL_MINUTES) > 0
+    ? Number(PAYOS_QR_TTL_MINUTES)
+    : 15;
+
+const computeExpiry = (fromDate = new Date()) => {
+    const expiryDate = new Date(fromDate.getTime() + ttlMinutes * 60 * 1000);
+    return {
+        expiresAtDate: expiryDate,
+        expiresAtUnix: Math.floor(expiryDate.getTime() / 1000),
+    };
+};
+
+const buildPayOSPayload = ({ sessionId, amount, orderCode, expiredAt }) => ({
     orderCode,
     amount: Math.round(Number(amount)),
     description: `Checkout ${sessionId}`.slice(0, 25),
     returnUrl: `${PAYOS_DEFAULT_RETURN_URL}/${sessionId}`,
     cancelUrl: `${PAYOS_DEFAULT_CANCEL_URL}/${sessionId}`,
+    expiredAt,
 });
 
 const resolveActiveAttempt = async ({ intent, client }) => {
@@ -97,7 +110,8 @@ exports.createOrReuseIntent = async ({
                 activeAttempt.status === "PENDING" &&
                 activeAttempt.provider_order_code &&
                 activeAttempt.checkout_url &&
-                (!activeAttempt.expires_at || new Date(activeAttempt.expires_at) > new Date()) &&
+                activeAttempt.expires_at &&
+                new Date(activeAttempt.expires_at) > new Date() &&
                 Math.round(Number(activeAttempt.amount || intent.amount || 0)) === Math.round(Number(amount || 0))
             ) {
                 await client.query("COMMIT");
@@ -172,6 +186,7 @@ exports.createOrReuseIntent = async ({
                     ? idempotencyKey.trim()
                     : `pi-${intent.intent_id}-attempt-${attempt.attempt_id}`,
             reused: false,
+            ...computeExpiry(),
         };
         await client.query("COMMIT");
     } catch (error) {
@@ -188,6 +203,7 @@ exports.createOrReuseIntent = async ({
                 sessionId: pending.sessionId,
                 amount: pending.amount,
                 orderCode: Number(pending.providerOrderCode),
+                expiredAt: pending.expiresAtUnix,
             }),
             { idempotencyKey: pending.idempotencyKey }
         );
@@ -229,7 +245,9 @@ exports.createOrReuseIntent = async ({
                 providerOrderCode: String(link.orderCode || pending.providerOrderCode || pending.attemptId),
                 qrCodeUrl: link.qrCode || null,
                 checkoutUrl: link.checkoutUrl || null,
-                expiresAt: link.expiredAt || null,
+                expiresAt: link.expiredAt
+                    ? new Date(link.expiredAt)
+                    : pending.expiresAtDate,
             },
             writeClient
         );

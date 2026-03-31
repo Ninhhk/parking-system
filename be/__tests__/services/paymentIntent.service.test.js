@@ -96,7 +96,7 @@ describe("paymentIntent service", () => {
             provider_order_code: "oc_21",
             checkout_url: "https://payos/checkout/21",
             qr_code_url: "qr_21",
-            expires_at: "2026-03-29T12:00:00.000Z",
+            expires_at: "2099-03-29T12:00:00.000Z",
         });
 
         const result = await paymentIntentService.createOrReuseIntent({
@@ -140,7 +140,7 @@ describe("paymentIntent service", () => {
             orderCode: 123456,
             checkoutUrl: "https://payos/checkout/22",
             qrCode: "qr_22",
-            expiredAt: "2026-03-29T13:00:00.000Z",
+            expiredAt: "2099-03-29T13:00:00.000Z",
         });
 
         attemptRepo.attachProviderIntent.mockResolvedValue({
@@ -150,7 +150,7 @@ describe("paymentIntent service", () => {
             provider_order_code: "123456",
             checkout_url: "https://payos/checkout/22",
             qr_code_url: "qr_22",
-            expires_at: "2026-03-29T13:00:00.000Z",
+            expires_at: "2099-03-29T13:00:00.000Z",
         });
 
         intentRepo.setActiveAttempt.mockResolvedValue({
@@ -221,7 +221,7 @@ describe("paymentIntent service", () => {
             provider_order_code: "123456",
             checkout_url: "https://payos/checkout/22",
             qr_code_url: "qr_22",
-            expires_at: "2026-03-29T13:00:00.000Z",
+            expires_at: "2099-03-29T13:00:00.000Z",
         });
 
         const result = await paymentIntentService.getPaymentStatus({ intentId: 10 });
@@ -241,7 +241,7 @@ describe("paymentIntent service", () => {
                 provider_order_code: "123456",
                 checkout_url: "https://payos/checkout/22",
                 qr_code_url: "qr_22",
-                expires_at: "2026-03-29T13:00:00.000Z",
+                expires_at: "2099-03-29T13:00:00.000Z",
             },
         });
     });
@@ -282,7 +282,7 @@ describe("paymentIntent service", () => {
             orderCode: 22,
             checkoutUrl: "https://payos/checkout/22",
             qrCode: "qr_22",
-            expiredAt: "2026-03-29T13:00:00.000Z",
+            expiredAt: "2099-03-29T13:00:00.000Z",
         });
 
         attemptRepo.attachProviderIntent.mockResolvedValue({
@@ -292,7 +292,7 @@ describe("paymentIntent service", () => {
             provider_order_code: "22",
             checkout_url: "https://payos/checkout/22",
             qr_code_url: "qr_22",
-            expires_at: "2026-03-29T13:00:00.000Z",
+            expires_at: "2099-03-29T13:00:00.000Z",
         });
 
         intentRepo.setActiveAttempt.mockResolvedValue({
@@ -359,7 +359,7 @@ describe("paymentIntent service", () => {
             orderCode: 24,
             checkoutUrl: "https://payos/checkout/24",
             qrCode: "qr_24",
-            expiredAt: "2026-03-29T13:00:00.000Z",
+            expiredAt: "2099-03-29T13:00:00.000Z",
         });
 
         attemptRepo.attachProviderIntent.mockResolvedValue({
@@ -369,7 +369,7 @@ describe("paymentIntent service", () => {
             provider_order_code: "24",
             checkout_url: "https://payos/checkout/24",
             qr_code_url: "qr_24",
-            expires_at: "2026-03-29T13:00:00.000Z",
+            expires_at: "2099-03-29T13:00:00.000Z",
         });
 
         intentRepo.setActiveAttempt.mockResolvedValue({
@@ -397,6 +397,158 @@ describe("paymentIntent service", () => {
 
         expect(result.reused).toBe(false);
         expect(attemptRepo.createAttempt).toHaveBeenCalled();
+    });
+
+    it("does not reuse pending attempt when expires_at is null", async () => {
+        const writeClient = {
+            query: jest.fn().mockResolvedValue({ rows: [] }),
+            release: jest.fn(),
+        };
+        mockConnect.mockReturnValueOnce(dbClient).mockReturnValueOnce(writeClient);
+
+        intentRepo.getActiveBySessionForUpdate.mockResolvedValue({
+            intent_id: 10,
+            session_id: 1,
+            status: "PENDING",
+            active_attempt_id: 21,
+            amount: 20000,
+            provider: "PAYOS",
+        });
+
+        attemptRepo.getById.mockResolvedValue({
+            attempt_id: 21,
+            intent_id: 10,
+            status: "PENDING",
+            amount: 20000,
+            provider_order_code: "21",
+            checkout_url: "https://payos/checkout/21",
+            qr_code_url: "qr_21",
+            expires_at: null,
+        });
+
+        attemptRepo.createAttempt.mockResolvedValue({
+            attempt_id: 24,
+            intent_id: 10,
+            status: "PENDING",
+        });
+
+        payosProvider.createPaymentLink.mockResolvedValue({
+            orderCode: 24,
+            checkoutUrl: "https://payos/checkout/24",
+            qrCode: "qr_24",
+            expiredAt: "2099-03-29T13:00:00.000Z",
+        });
+
+        attemptRepo.attachProviderIntent.mockResolvedValue({
+            attempt_id: 24,
+            intent_id: 10,
+            status: "PENDING",
+            provider_order_code: "24",
+            checkout_url: "https://payos/checkout/24",
+            qr_code_url: "qr_24",
+            expires_at: "2099-03-29T13:00:00.000Z",
+        });
+
+        intentRepo.setActiveAttempt.mockResolvedValue({
+            intent_id: 10,
+            active_attempt_id: 24,
+            status: "PENDING",
+            amount: 20000,
+            provider: "PAYOS",
+        });
+
+        intentRepo.updateIntentStatus.mockResolvedValue({
+            intent_id: 10,
+            session_id: 1,
+            status: "PENDING",
+            amount: 20000,
+            active_attempt_id: 24,
+            provider: "PAYOS",
+        });
+
+        const result = await paymentIntentService.createOrReuseIntent({
+            sessionId: 1,
+            paymentMethod: "CARD",
+            forceNew: false,
+        });
+
+        expect(result.reused).toBe(false);
+        expect(attemptRepo.createAttempt).toHaveBeenCalled();
+    });
+
+    it("passes expiredAt to provider and stores fallback expiry when provider omits it", async () => {
+        const writeClient = {
+            query: jest.fn().mockResolvedValue({ rows: [] }),
+            release: jest.fn(),
+        };
+        mockConnect.mockReturnValueOnce(dbClient).mockReturnValueOnce(writeClient);
+
+        intentRepo.getActiveBySessionForUpdate.mockResolvedValue({
+            intent_id: 10,
+            session_id: 1,
+            status: "PENDING",
+            amount: 20000,
+            provider: "PAYOS",
+        });
+
+        attemptRepo.createAttempt.mockResolvedValue({
+            attempt_id: 25,
+            intent_id: 10,
+            status: "PENDING",
+        });
+
+        payosProvider.createPaymentLink.mockResolvedValue({
+            orderCode: 25,
+            checkoutUrl: "https://payos/checkout/25",
+            qrCode: "qr_25",
+        });
+
+        attemptRepo.attachProviderIntent.mockResolvedValue({
+            attempt_id: 25,
+            intent_id: 10,
+            status: "PENDING",
+            provider_order_code: "25",
+            checkout_url: "https://payos/checkout/25",
+            qr_code_url: "qr_25",
+            expires_at: "2099-03-29T13:00:00.000Z",
+        });
+
+        intentRepo.setActiveAttempt.mockResolvedValue({
+            intent_id: 10,
+            active_attempt_id: 25,
+            status: "PENDING",
+            amount: 20000,
+            provider: "PAYOS",
+        });
+
+        intentRepo.updateIntentStatus.mockResolvedValue({
+            intent_id: 10,
+            session_id: 1,
+            status: "PENDING",
+            amount: 20000,
+            active_attempt_id: 25,
+            provider: "PAYOS",
+        });
+
+        await paymentIntentService.createOrReuseIntent({
+            sessionId: 1,
+            paymentMethod: "CARD",
+            forceNew: true,
+        });
+
+        expect(payosProvider.createPaymentLink).toHaveBeenCalledWith(
+            expect.objectContaining({
+                expiredAt: expect.any(Number),
+            }),
+            expect.any(Object)
+        );
+        expect(attemptRepo.attachProviderIntent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                attemptId: 25,
+                expiresAt: expect.anything(),
+            }),
+            writeClient
+        );
     });
 
     it("marks attempt failed and intent requires payment method when provider link creation fails", async () => {
@@ -478,7 +630,7 @@ describe("paymentIntent service", () => {
             orderCode: 25,
             checkoutUrl: "https://payos/checkout/25",
             qrCode: "qr_25",
-            expiredAt: "2026-03-29T13:00:00.000Z",
+            expiredAt: "2099-03-29T13:00:00.000Z",
         });
 
         await expect(

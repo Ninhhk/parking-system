@@ -41,6 +41,7 @@ const PAYOS_DEFAULT_RETURN_URL =
     process.env.PAYOS_RETURN_URL || 'http://localhost:3000/employee/checkout';
 const PAYOS_DEFAULT_CANCEL_URL =
     process.env.PAYOS_CANCEL_URL || 'http://localhost:3000/employee/checkout';
+const PAYOS_QR_TTL_MINUTES = parseInt(process.env.PAYOS_QR_TTL_MINUTES || '15', 10);
 
 // Feature Flags
 const PAYMENT_INTENT_V2_ENABLED = String(process.env.PAYMENT_INTENT_V2_ENABLED || 'true') === 'true';
@@ -80,6 +81,7 @@ module.exports = {
     // PayOS
     PAYOS_DEFAULT_RETURN_URL,
     PAYOS_DEFAULT_CANCEL_URL,
+    PAYOS_QR_TTL_MINUTES,
 
     // Feature Flags
     PAYMENT_INTENT_V2_ENABLED,
