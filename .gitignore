@@ -71,3 +71,4 @@ tmp/
 document
 .worktrees/
 AGENTS.md
+.github

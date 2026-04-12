@@ -66,44 +66,39 @@ exports.checkInVehicle = async (req, res) => {
             });
         }
 
-        // Check if lot is full for this vehicle type
-        if (vehicle_type.toLowerCase() === "car" && parkingLot.current_car >= parkingLot.car_capacity) {
-            return res.status(400).json({
-                success: false,
-                message: "Parking lot is full for cars",
-            });
-        }
-
-        if (vehicle_type.toLowerCase() === "bike" && parkingLot.current_bike >= parkingLot.bike_capacity) {
-            return res.status(400).json({
-                success: false,
-                message: "Parking lot is full for bikes",
-            });
-        }
-
-        // Check if there's an active session for this license plate
-        const activeSessions = await sessionsRepo.getActiveSessionsByLot(parkingLot.lot_id);
-        const hasActiveSession = activeSessions.some((session) => session.license_plate === license_plate);
-
-        if (hasActiveSession) {
-            return res.status(400).json({
-                success: false,
-                message: "This vehicle already has an active session",
-            });
-        }
-
         // Check if vehicle has a monthly subscription
         const today = getToday();
         const monthlyPass = await sessionsRepo.checkMonthlySub(license_plate, today);
         const is_monthly = !!monthlyPass;
 
         // Create new session with the employee's assigned lot
-        const newSession = await sessionsRepo.startSession({
-            lot_id: parkingLot.lot_id,
-            license_plate,
-            vehicle_type,
-            is_monthly,
-        });
+        // Atomic capacity check happens at database level
+        let newSession;
+        try {
+            newSession = await sessionsRepo.startSession({
+                lot_id: parkingLot.lot_id,
+                license_plate,
+                vehicle_type,
+                is_monthly,
+            });
+        } catch (error) {
+            // Handle unique constraint violation (duplicate active session)
+            if (error.code === "23505" && error.constraint === "uq_active_session_plate") {
+                return res.status(409).json({
+                    success: false,
+                    message: "This vehicle already has an active session",
+                });
+            }
+            throw error; // Re-throw other errors
+        }
+
+        // If newSession is null, parking lot is at capacity
+        if (!newSession) {
+            return res.status(409).json({
+                success: false,
+                message: `Parking lot is full for ${vehicle_type.toLowerCase()}s`,
+            });
+        }
 
         // Generate ticket with QR/barcode data
         // In a real system, you might use a library to generate actual QR/barcode

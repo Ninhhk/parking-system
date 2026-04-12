@@ -12,6 +12,27 @@ exports.startSession = async (sessionData) => {
 
         const { lot_id, license_plate, vehicle_type, is_monthly } = sessionData;
 
+        // Atomic capacity check: Update parking lot count with capacity constraint
+        const column = vehicle_type.toLowerCase() === "car" ? "current_car" : "current_bike";
+        const capacityColumn = vehicle_type.toLowerCase() === "car" ? "car_capacity" : "bike_capacity";
+
+        const updateLotQuery = `
+            UPDATE ParkingLots
+            SET ${column} = ${column} + 1
+            WHERE lot_id = $1
+              AND ${column} < ${capacityColumn}
+            RETURNING *
+        `;
+
+        const capacityResult = await client.query(updateLotQuery, [lot_id]);
+
+        // If no rows updated, lot is at capacity
+        if (capacityResult.rowCount === 0) {
+            await client.query("ROLLBACK");
+            client.release();
+            return null; // Signal capacity full to caller
+        }
+
         // Insert the new session - added parking_fee with default value of 0
         const query = `
             INSERT INTO ParkingSessions (
@@ -26,18 +47,6 @@ exports.startSession = async (sessionData) => {
         `;
 
         const result = await client.query(query, [lot_id, license_plate, vehicle_type, is_monthly]);
-
-        // Update the parking lot vehicle count
-        const column = vehicle_type.toLowerCase() === "car" ? "current_car" : "current_bike";
-
-        const updateLotQuery = `
-            UPDATE ParkingLots
-            SET ${column} = ${column} + 1
-            WHERE lot_id = $1
-            RETURNING *
-        `;
-
-        await client.query(updateLotQuery, [lot_id]);
 
         // Commit the transaction
         await client.query("COMMIT");
@@ -148,7 +157,7 @@ exports.confirmPayment = async (paymentData) => {
 
         const updateLotQuery = `
             UPDATE ParkingLots
-            SET ${column} = ${column} - 1
+            SET ${column} = GREATEST(${column} - 1, 0)
             WHERE lot_id = $1
             RETURNING *
         `;
