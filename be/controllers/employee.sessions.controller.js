@@ -111,7 +111,14 @@ exports.checkInVehicle = async (req, res) => {
             newSession = await sessionsRepo.startSession(startSessionPayload);
         } catch (error) {
             // Handle unique constraint violation (duplicate active session)
-            if (error.code === "23505" && error.constraint === "uq_active_session_plate") {
+            if (
+                error.code === "23505" &&
+                [
+                    "uq_active_session_plate",
+                    "uq_active_session_card_uid",
+                    "uq_active_session_etag_epc",
+                ].includes(error.constraint)
+            ) {
                 return res.status(409).json({
                     success: false,
                     message: "This vehicle already has an active session",

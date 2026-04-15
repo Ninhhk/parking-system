@@ -13,6 +13,18 @@ const { pool } = require("../../config/db");
 const sessionsRepo = require("../../repositories/employee.sessions.repo");
 const edgeCheckinService = require("../../services/edge.checkin.service");
 
+function stableAdvisoryKey(namespace, value) {
+    const text = `${namespace}:${value || ""}`;
+    let hash = 2166136261;
+
+    for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+
+    return hash | 0;
+}
+
 describe("edge.checkin.service lane module policy", () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -103,6 +115,11 @@ describe("edge.checkin.service lane module policy", () => {
         const release = jest.fn();
         pool.connect.mockResolvedValue({ query, release });
 
+        sessionsRepo.startSession.mockResolvedValue({
+            session_id: 12,
+            entry_lane_id: "lane-uhf-only-1",
+        });
+
         sessionsRepo.enrichRecentSessionByLane.mockResolvedValue({
             session_id: 12,
             entry_lane_id: "lane-uhf-only-1",
@@ -123,6 +140,62 @@ describe("edge.checkin.service lane module policy", () => {
         }), { client: { query, release } });
         expect(query).toHaveBeenCalledWith("BEGIN");
         expect(query).toHaveBeenCalledWith("COMMIT");
+        expect(release).toHaveBeenCalled();
+    });
+
+    test("uses deterministic advisory lock keys derived from gateway_id and lane_id", async () => {
+        const query = jest.fn();
+        const release = jest.fn();
+        pool.connect.mockResolvedValue({ query, release });
+
+        sessionsRepo.startSession.mockResolvedValue({
+            session_id: 99,
+            entry_lane_id: "lane-mixed-1",
+        });
+
+        await edgeCheckinService.ingestCheckinEvent({
+            gateway_id: "gw-edge-2",
+            lane_id: "lane-mixed-1",
+            trigger_type: "CARD",
+            lot_id: 1,
+            vehicle_type: "car",
+            card_uid: "CARD-LOCK-001",
+        });
+
+        expect(query).toHaveBeenCalledWith(
+            "SELECT pg_advisory_xact_lock($1, $2)",
+            [
+                stableAdvisoryKey("gateway", "gw-edge-2"),
+                stableAdvisoryKey("lane", "lane-mixed-1"),
+            ]
+        );
+        expect(query).toHaveBeenCalledWith("COMMIT");
+        expect(release).toHaveBeenCalled();
+    });
+
+    test("maps repository capacity-full signal to a 409 business error", async () => {
+        const query = jest.fn();
+        const release = jest.fn();
+        pool.connect.mockResolvedValue({ query, release });
+
+        sessionsRepo.startSession.mockResolvedValue(null);
+
+        await expect(edgeCheckinService.ingestCheckinEvent({
+            gateway_id: "gw-edge-1",
+            lane_id: "lane-card-lpd-1",
+            trigger_type: "CARD",
+            lot_id: 1,
+            vehicle_type: "car",
+            card_uid: "CARD-FULL-001",
+        })).rejects.toMatchObject({
+            status: 409,
+            code: "LOT_CAPACITY_FULL",
+            publicMessage: "Parking lot is full for cars",
+        });
+
+        expect(query).toHaveBeenCalledWith("BEGIN");
+        expect(query).toHaveBeenCalledWith("ROLLBACK");
+        expect(query).not.toHaveBeenCalledWith("COMMIT");
         expect(release).toHaveBeenCalled();
     });
 

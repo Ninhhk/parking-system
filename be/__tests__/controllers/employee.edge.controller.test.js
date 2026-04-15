@@ -9,9 +9,34 @@ describe("employee.edge.controller", () => {
     });
 
     describe("ingestCheckinEvent", () => {
+        it("returns 422 when gateway_id is missing", async () => {
+            const req = {
+                body: {
+                    lane_id: "L1",
+                    trigger_type: "IC_CARD",
+                    vehicle_type: "CAR",
+                    lot_id: 1,
+                },
+            };
+            const res = {
+                status: jest.fn().mockReturnThis(),
+                json: jest.fn(),
+            };
+
+            await controller.ingestCheckinEvent(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(422);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                message: "gateway_id is required",
+            });
+            expect(edgeCheckinService.ingestCheckinEvent).not.toHaveBeenCalled();
+        });
+
         it("returns 422 when lane_id is missing", async () => {
             const req = {
                 body: {
+                    gateway_id: "GW-1",
                     trigger_type: "IC_CARD",
                     vehicle_type: "CAR",
                     lot_id: 1,
@@ -32,6 +57,33 @@ describe("employee.edge.controller", () => {
             expect(edgeCheckinService.ingestCheckinEvent).not.toHaveBeenCalled();
         });
 
+        it("returns 409 when service resolves null session", async () => {
+            edgeCheckinService.ingestCheckinEvent.mockResolvedValue(null);
+
+            const req = {
+                body: {
+                    gateway_id: "GW-1",
+                    lane_id: "L1",
+                    trigger_type: "IC_CARD",
+                    vehicle_type: "CAR",
+                    lot_id: 1,
+                    card_uid: "CARD-001",
+                },
+            };
+            const res = {
+                status: jest.fn().mockReturnThis(),
+                json: jest.fn(),
+            };
+
+            await controller.ingestCheckinEvent(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(409);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                message: "Parking lot is full for this vehicle type",
+            });
+        });
+
         it("returns 201 for valid IC_CARD payload", async () => {
             const session = {
                 session_id: 10,
@@ -42,6 +94,7 @@ describe("employee.edge.controller", () => {
 
             const req = {
                 body: {
+                    gateway_id: "GW-1",
                     lane_id: "L1",
                     trigger_type: "IC_CARD",
                     vehicle_type: "CAR",
@@ -73,6 +126,7 @@ describe("employee.edge.controller", () => {
 
             const req = {
                 body: {
+                    gateway_id: "GW-1",
                     lane_id: "L1",
                     trigger_type: "IC_CARD",
                     vehicle_type: "CAR",
@@ -102,6 +156,7 @@ describe("employee.edge.controller", () => {
 
             const req = {
                 body: {
+                    gateway_id: "GW-1",
                     lane_id: "L1",
                     trigger_type: "IC_CARD",
                     vehicle_type: "CAR",
@@ -131,6 +186,7 @@ describe("employee.edge.controller", () => {
 
             const req = {
                 body: {
+                    gateway_id: "GW-1",
                     lane_id: "L1",
                     trigger_type: "IC_CARD",
                     vehicle_type: "INVALID",
@@ -157,6 +213,7 @@ describe("employee.edge.controller", () => {
 
             const req = {
                 body: {
+                    gateway_id: "GW-1",
                     lane_id: "L1",
                     trigger_type: "IC_CARD",
                     vehicle_type: "CAR",

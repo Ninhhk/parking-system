@@ -1,6 +1,6 @@
 const edgeCheckinService = require("../services/edge.checkin.service");
 
-const REQUIRED_FIELDS = ["lane_id", "trigger_type", "vehicle_type", "lot_id"];
+const REQUIRED_FIELDS = ["gateway_id", "lane_id", "trigger_type", "vehicle_type", "lot_id"];
 
 function getMissingFields(payload = {}) {
     return REQUIRED_FIELDS.filter((field) => {
@@ -28,6 +28,13 @@ exports.ingestCheckinEvent = async (req, res) => {
         }
 
         const session = await edgeCheckinService.ingestCheckinEvent(req.body);
+        if (!session) {
+            return res.status(409).json({
+                success: false,
+                message: "Parking lot is full for this vehicle type",
+            });
+        }
+
         return res.status(201).json({
             success: true,
             message: "Edge check-in event ingested successfully",
@@ -45,6 +52,13 @@ exports.ingestCheckinEvent = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: error.message || "Parking lot not found",
+            });
+        }
+
+        if (error.code === "LOT_CAPACITY_FULL") {
+            return res.status(409).json({
+                success: false,
+                message: error.publicMessage || "Parking lot is full for this vehicle type",
             });
         }
 

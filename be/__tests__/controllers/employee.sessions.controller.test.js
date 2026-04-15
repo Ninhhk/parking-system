@@ -218,4 +218,34 @@ describe("employee.sessions.controller checkInVehicle", () => {
             message: "This vehicle already has an active session",
         });
     });
+
+    it.each([
+        ["uq_active_session_card_uid", { vehicle_type: "car", card_uid: "CARD-UNIQUE-1" }],
+        ["uq_active_session_etag_epc", { vehicle_type: "bike", etag_epc: "EPC-UNIQUE-1" }],
+    ])("maps %s unique-conflict to 409", async (constraintName, bodyPayload) => {
+        const req = {
+            body: bodyPayload,
+            session: {
+                user: { user_id: 11 },
+            },
+        };
+        const res = {
+            status: jest.fn().mockReturnThis(),
+            json: jest.fn(),
+        };
+
+        lotsRepo.getParkingLotByManager.mockResolvedValue({ lot_id: 5, lot_name: "Assigned Lot" });
+        sessionsRepo.startSession.mockRejectedValue({
+            code: "23505",
+            constraint: constraintName,
+        });
+
+        await controller.checkInVehicle(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(409);
+        expect(res.json).toHaveBeenCalledWith({
+            success: false,
+            message: "This vehicle already has an active session",
+        });
+    });
 });

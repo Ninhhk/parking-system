@@ -47,6 +47,9 @@ describe("Check-in Concurrency Tests", () => {
         await pool.query("DELETE FROM parkingsessions WHERE lot_id = $1", [testLotId]);
         await pool.query("DELETE FROM parkinglots WHERE lot_id = $1", [testLotId]);
         await pool.query("DELETE FROM users WHERE user_id = $1", [testUserId]);
+
+        // Ensure open pg handles are closed for this file.
+        await pool.end();
     });
 
     afterEach(async () => {

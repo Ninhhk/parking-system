@@ -12,6 +12,14 @@ function toValidationError(publicMessage) {
     return error;
 }
 
+function toBusinessError(status, code, publicMessage) {
+    const error = new Error(publicMessage);
+    error.status = status;
+    error.code = code;
+    error.publicMessage = publicMessage;
+    return error;
+}
+
 function normalizeTriggerType(triggerType) {
     if (typeof triggerType !== "string") {
         return "";
@@ -35,27 +43,22 @@ function getLanePolicy(gatewayId, laneId) {
 }
 
 function getLaneLockKeys(gatewayId, laneId) {
-    const gateways = Array.isArray(edgeGatewaysConfig?.gateways)
-        ? edgeGatewaysConfig.gateways
-        : [];
-
-    const gatewayIndex = gateways.findIndex((item) => item && item.gateway_id === gatewayId);
-    if (gatewayIndex === -1) {
-        return null;
-    }
-
-    const lanes = Array.isArray(gateways[gatewayIndex].lanes)
-        ? gateways[gatewayIndex].lanes
-        : [];
-    const laneIndex = lanes.findIndex((lane) => lane && lane.lane_id === laneId);
-    if (laneIndex === -1) {
-        return null;
-    }
-
     return {
-        gatewayLockKey: gatewayIndex + 1,
-        laneLockKey: laneIndex + 1,
+        gatewayLockKey: stableAdvisoryKey("gateway", gatewayId),
+        laneLockKey: stableAdvisoryKey("lane", laneId),
     };
+}
+
+function stableAdvisoryKey(namespace, value) {
+    const text = `${namespace}:${value || ""}`;
+    let hash = 2166136261;
+
+    for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+
+    return hash | 0;
 }
 
 function getCorrelationWindowSeconds(lanePolicy) {
@@ -103,9 +106,6 @@ exports.ingestCheckinEvent = async (event) => {
         await client.query("BEGIN");
 
         const lockKeys = getLaneLockKeys(gatewayId, laneId);
-        if (!lockKeys) {
-            throw toValidationError("Lane configuration not found");
-        }
 
         const { gatewayLockKey, laneLockKey } = lockKeys;
         await client.query("SELECT pg_advisory_xact_lock($1, $2)", [gatewayLockKey, laneLockKey]);
@@ -142,6 +142,14 @@ exports.ingestCheckinEvent = async (event) => {
             vehicle_type: vehicleType,
             is_monthly: !!event.is_monthly,
         }, { client });
+
+        if (!created) {
+            throw toBusinessError(
+                409,
+                "LOT_CAPACITY_FULL",
+                `Parking lot is full for ${String(vehicleType).toLowerCase()}s`
+            );
+        }
 
         await client.query("COMMIT");
         return created;
