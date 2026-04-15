@@ -48,10 +48,17 @@ CREATE TABLE IF NOT EXISTS monthlysubs (
 CREATE TABLE IF NOT EXISTS parkingsessions (
     session_id SERIAL PRIMARY KEY,
     lot_id INT NOT NULL,
-    license_plate VARCHAR(20) NOT NULL,
+    license_plate VARCHAR(20),
+    card_uid VARCHAR(100),
+    etag_epc VARCHAR(128),
+    entry_lane_id VARCHAR(50),
     vehicle_type VARCHAR(50) NOT NULL,
     time_in TIMESTAMP NOT NULL,
     time_out TIMESTAMP,
+    image_in_url TEXT,
+    image_out_url TEXT,
+    metadata_in JSONB DEFAULT '{}'::jsonb,
+    metadata_out JSONB DEFAULT '{}'::jsonb,
     is_lost BOOLEAN DEFAULT FALSE,
     is_monthly BOOLEAN,
     parking_fee DECIMAL(10, 2) NOT NULL,
@@ -112,6 +119,22 @@ CREATE INDEX IF NOT EXISTS idx_sessions_lot_timeout
 
 CREATE INDEX IF NOT EXISTS idx_sessions_license_plate
     ON parkingsessions (license_plate);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_session_plate
+    ON parkingsessions (license_plate)
+    WHERE time_out IS NULL AND license_plate IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_session_card_uid
+    ON parkingsessions (card_uid)
+    WHERE time_out IS NULL AND card_uid IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_session_etag_epc
+    ON parkingsessions (etag_epc)
+    WHERE time_out IS NULL AND etag_epc IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_active_session_entry_lane_timein
+    ON parkingsessions (entry_lane_id, time_in DESC)
+    WHERE time_out IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_monthlysubs_license_plate
     ON monthlysubs (license_plate);

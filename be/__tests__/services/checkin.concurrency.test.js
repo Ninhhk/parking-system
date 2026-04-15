@@ -2,6 +2,8 @@ const request = require("supertest");
 const app = require("../../app");
 const { pool } = require("../../config/db");
 const sessionsRepo = require("../../repositories/employee.sessions.repo");
+const edgeCheckinService = require("../../services/edge.checkin.service");
+const { hashPassword } = require("../../utils/pw");
 
 describe("Check-in Concurrency Tests", () => {
     let testLotId;
@@ -9,12 +11,14 @@ describe("Check-in Concurrency Tests", () => {
     let authCookie;
 
     beforeAll(async () => {
+        const passwordHash = await hashPassword("password123");
+
         // Create test user (employee)
         const userResult = await pool.query(
             `INSERT INTO users (username, password_hash, full_name, role) 
              VALUES ($1, $2, $3, $4) 
              RETURNING user_id`,
-            ["test_employee_concurrency", "hash", "Test Employee", "employee"]
+            ["test_employee_concurrency", passwordHash, "Test Employee", "employee"]
         );
         testUserId = userResult.rows[0].user_id;
 
@@ -32,6 +36,9 @@ describe("Check-in Concurrency Tests", () => {
             username: "test_employee_concurrency",
             password: "password123",
         });
+        if (loginRes.status !== 200 || !loginRes.headers["set-cookie"]) {
+            throw new Error("Test setup failed: unable to authenticate test employee user");
+        }
         authCookie = loginRes.headers["set-cookie"];
     });
 
@@ -40,6 +47,8 @@ describe("Check-in Concurrency Tests", () => {
         await pool.query("DELETE FROM parkingsessions WHERE lot_id = $1", [testLotId]);
         await pool.query("DELETE FROM parkinglots WHERE lot_id = $1", [testLotId]);
         await pool.query("DELETE FROM users WHERE user_id = $1", [testUserId]);
+
+        // Ensure open pg handles are closed for this file.
         await pool.end();
     });
 
@@ -47,6 +56,86 @@ describe("Check-in Concurrency Tests", () => {
         // Clean up sessions after each test
         await pool.query("DELETE FROM parkingsessions WHERE lot_id = $1", [testLotId]);
         await pool.query("UPDATE parkinglots SET current_car = 0, current_bike = 0 WHERE lot_id = $1", [testLotId]);
+    });
+
+    describe("Hybrid Edge Check-in Schema", () => {
+        test("parkingsessions includes hybrid identifier and metadata columns", async () => {
+            const columnsResult = await pool.query(
+                `SELECT column_name, is_nullable, data_type, udt_name, column_default
+                 FROM information_schema.columns
+                 WHERE table_schema = 'public' AND table_name = 'parkingsessions'`
+            );
+
+            const columnsByName = columnsResult.rows.reduce((acc, row) => {
+                acc[row.column_name] = row;
+                return acc;
+            }, {});
+
+            expect(columnsByName.license_plate).toBeDefined();
+            expect(columnsByName.license_plate.is_nullable).toBe("YES");
+
+            expect(columnsByName.card_uid).toBeDefined();
+            expect(columnsByName.card_uid.is_nullable).toBe("YES");
+
+            expect(columnsByName.etag_epc).toBeDefined();
+            expect(columnsByName.etag_epc.is_nullable).toBe("YES");
+
+            expect(columnsByName.entry_lane_id).toBeDefined();
+            expect(columnsByName.entry_lane_id.is_nullable).toBe("YES");
+
+            expect(columnsByName.image_in_url).toBeDefined();
+            expect(columnsByName.image_in_url.is_nullable).toBe("YES");
+
+            expect(columnsByName.image_out_url).toBeDefined();
+            expect(columnsByName.image_out_url.is_nullable).toBe("YES");
+
+            expect(columnsByName.metadata_in).toBeDefined();
+            expect(columnsByName.metadata_in.data_type).toBe("jsonb");
+            expect(columnsByName.metadata_in.udt_name).toBe("jsonb");
+            expect(columnsByName.metadata_in.column_default).toContain("{}::jsonb");
+
+            expect(columnsByName.metadata_out).toBeDefined();
+            expect(columnsByName.metadata_out.data_type).toBe("jsonb");
+            expect(columnsByName.metadata_out.udt_name).toBe("jsonb");
+            expect(columnsByName.metadata_out.column_default).toContain("{}::jsonb");
+        });
+
+        test("parkingsessions includes required partial indexes for hybrid check-in", async () => {
+            const indexesResult = await pool.query(
+                `SELECT indexname, indexdef
+                 FROM pg_indexes
+                 WHERE schemaname = 'public'
+                   AND tablename = 'parkingsessions'
+                   AND indexname IN (
+                        'uq_active_session_plate',
+                        'uq_active_session_card_uid',
+                        'uq_active_session_etag_epc',
+                        'idx_active_session_entry_lane_timein'
+                   )`
+            );
+
+            const indexesByName = indexesResult.rows.reduce((acc, row) => {
+                acc[row.indexname] = row.indexdef.toLowerCase().replace(/\s+/g, " ").trim();
+                return acc;
+            }, {});
+
+            expect(indexesByName.uq_active_session_plate).toBeDefined();
+            expect(indexesByName.uq_active_session_plate).toContain("time_out is null");
+            expect(indexesByName.uq_active_session_plate).toContain("license_plate is not null");
+
+            expect(indexesByName.uq_active_session_card_uid).toBeDefined();
+            expect(indexesByName.uq_active_session_card_uid).toContain("time_out is null");
+            expect(indexesByName.uq_active_session_card_uid).toContain("card_uid is not null");
+
+            expect(indexesByName.uq_active_session_etag_epc).toBeDefined();
+            expect(indexesByName.uq_active_session_etag_epc).toContain("time_out is null");
+            expect(indexesByName.uq_active_session_etag_epc).toContain("etag_epc is not null");
+
+            expect(indexesByName.idx_active_session_entry_lane_timein).toBeDefined();
+            expect(indexesByName.idx_active_session_entry_lane_timein).toContain("entry_lane_id");
+            expect(indexesByName.idx_active_session_entry_lane_timein).toContain("time_in desc");
+            expect(indexesByName.idx_active_session_entry_lane_timein).toContain("time_out is null");
+        });
     });
 
     describe("Capacity Enforcement", () => {
@@ -169,6 +258,64 @@ describe("Check-in Concurrency Tests", () => {
             expect(parseInt(sessions.rows[0].count)).toBe(1);
         });
 
+        test("should prevent duplicate active sessions for same card_uid", async () => {
+            const cardUid = "CARD-UID-001";
+
+            const first = await sessionsRepo.startSession({
+                lot_id: testLotId,
+                license_plate: null,
+                card_uid: cardUid,
+                vehicle_type: "car",
+                is_monthly: false,
+            });
+            expect(first).not.toBeNull();
+
+            await expect(
+                sessionsRepo.startSession({
+                    lot_id: testLotId,
+                    license_plate: null,
+                    card_uid: cardUid,
+                    vehicle_type: "car",
+                    is_monthly: false,
+                })
+            ).rejects.toThrow();
+
+            const sessions = await pool.query(
+                "SELECT COUNT(*) FROM parkingsessions WHERE card_uid = $1 AND time_out IS NULL",
+                [cardUid]
+            );
+            expect(parseInt(sessions.rows[0].count, 10)).toBe(1);
+        });
+
+        test("should prevent duplicate active sessions for same etag_epc", async () => {
+            const etagEpc = "EPC-001";
+
+            const first = await sessionsRepo.startSession({
+                lot_id: testLotId,
+                license_plate: null,
+                etag_epc: etagEpc,
+                vehicle_type: "bike",
+                is_monthly: false,
+            });
+            expect(first).not.toBeNull();
+
+            await expect(
+                sessionsRepo.startSession({
+                    lot_id: testLotId,
+                    license_plate: null,
+                    etag_epc: etagEpc,
+                    vehicle_type: "bike",
+                    is_monthly: false,
+                })
+            ).rejects.toThrow();
+
+            const sessions = await pool.query(
+                "SELECT COUNT(*) FROM parkingsessions WHERE etag_epc = $1 AND time_out IS NULL",
+                [etagEpc]
+            );
+            expect(parseInt(sessions.rows[0].count, 10)).toBe(1);
+        });
+
         test("should handle concurrent duplicate attempts gracefully via API", async () => {
             if (!authCookie) {
                 console.log("Skipping API test - no auth cookie");
@@ -208,6 +355,104 @@ describe("Check-in Concurrency Tests", () => {
                 [plate]
             );
             expect(parseInt(sessions.rows[0].count)).toBe(1);
+        });
+    });
+
+    describe("Hybrid Lane Enrichment", () => {
+        test("delayed LPD enrich updates same active session in lane within 5 seconds", async () => {
+            const entryLaneId = "lane-a";
+            const started = await sessionsRepo.startSession({
+                lot_id: testLotId,
+                vehicle_type: "car",
+                is_monthly: false,
+                license_plate: null,
+                card_uid: "CARD-LPD-001",
+                entry_lane_id: entryLaneId,
+                metadata_in: { source: "rfid" },
+            });
+
+            expect(started).not.toBeNull();
+            expect(started.license_plate).toBeNull();
+
+            const enriched = await sessionsRepo.enrichRecentSessionByLane({
+                entry_lane_id: entryLaneId,
+                license_plate: "LPD123",
+                image_in_url: "https://example.com/in.jpg",
+                metadata_patch: { lpd_confidence: 0.97 },
+            });
+
+            expect(enriched).not.toBeNull();
+            expect(enriched.session_id).toBe(started.session_id);
+            expect(enriched.license_plate).toBe("LPD123");
+            expect(enriched.image_in_url).toBe("https://example.com/in.jpg");
+            expect(enriched.metadata_in).toMatchObject({
+                source: "rfid",
+                lpd_confidence: 0.97,
+            });
+        });
+
+        test("card + LPD concurrent same lane => one active session", async () => {
+            const gatewayId = "gw-edge-1";
+            const laneId = "lane-concurrent-1";
+            const cardEvent = {
+                gateway_id: gatewayId,
+                lot_id: testLotId,
+                lane_id: laneId,
+                trigger_type: "CARD",
+                card_uid: "CARD-CONCURRENT-001",
+                vehicle_type: "car",
+                is_monthly: false,
+                metadata: { source: "rfid" },
+            };
+
+            const lpdEvent = {
+                gateway_id: gatewayId,
+                lot_id: testLotId,
+                lane_id: laneId,
+                trigger_type: "LPD",
+                license_plate: "LPD-CONCURRENT-001",
+                image_in_url: "https://example.com/concurrent.jpg",
+                vehicle_type: "car",
+                is_monthly: false,
+                metadata: { lpd_confidence: 0.96 },
+            };
+
+            await Promise.all([
+                edgeCheckinService.ingestCheckinEvent(cardEvent),
+                edgeCheckinService.ingestCheckinEvent(lpdEvent),
+            ]);
+
+            const sessions = await pool.query(
+                `SELECT *
+                 FROM parkingsessions
+                 WHERE lot_id = $1 AND entry_lane_id = $2 AND time_out IS NULL
+                 ORDER BY time_in DESC`,
+                [testLotId, laneId]
+            );
+
+            expect(sessions.rows).toHaveLength(1);
+            expect(sessions.rows[0].card_uid).toBe("CARD-CONCURRENT-001");
+            expect(sessions.rows[0].license_plate).toBe("LPD-CONCURRENT-001");
+            expect(sessions.rows[0].metadata_in).toMatchObject({
+                source: "rfid",
+                lpd_confidence: 0.96,
+            });
+        });
+
+        test("rejects UHF trigger when lane module is disabled", async () => {
+            await expect(
+                edgeCheckinService.ingestCheckinEvent({
+                    gateway_id: "gw-edge-1",
+                    lane_id: "lane-card-lpd-1",
+                    trigger_type: "UHF",
+                    lot_id: testLotId,
+                    vehicle_type: "car",
+                    etag_epc: "EPC-DISABLED-001",
+                })
+            ).rejects.toMatchObject({
+                status: 422,
+                publicMessage: "Lane module disabled",
+            });
         });
     });
 

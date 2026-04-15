@@ -11,6 +11,11 @@ exports.checkInVehicle = async (req, res) => {
     try {
         const {
             license_plate: raw_license_plate,
+            card_uid,
+            etag_epc,
+            entry_lane_id,
+            image_in_url,
+            metadata_in,
             vehicle_type,
             lot_id, // We still accept this but will verify against employee's assigned lot
         } = req.body;
@@ -18,8 +23,10 @@ exports.checkInVehicle = async (req, res) => {
         const { sanitizePlate } = require("../utils/licensePlate");
         const license_plate = sanitizePlate(raw_license_plate);
 
+        const hasIdentity = !!(license_plate || card_uid || etag_epc);
+
         // Validate required fields
-        if (!license_plate || !vehicle_type) {
+        if (!vehicle_type || !hasIdentity) {
             return res.status(422).json({
                 success: false,
                 message: "Missing required fields",
@@ -27,7 +34,7 @@ exports.checkInVehicle = async (req, res) => {
         }
 
         // Validate license plate format (alphanumeric with optional hyphen)
-        if (!LICENSE_PLATE_REGEX.test(license_plate)) {
+        if (license_plate && !LICENSE_PLATE_REGEX.test(license_plate)) {
             return res.status(422).json({
                 success: false,
                 message: "Invalid license plate format",
@@ -67,26 +74,60 @@ exports.checkInVehicle = async (req, res) => {
         }
 
         // Check if vehicle has a monthly subscription
-        const today = getToday();
-        const monthlyPass = await sessionsRepo.checkMonthlySub(license_plate, today);
-        const is_monthly = !!monthlyPass;
+        let is_monthly = false;
+        if (license_plate) {
+            const today = getToday();
+            const monthlyPass = await sessionsRepo.checkMonthlySub(license_plate, today);
+            is_monthly = !!monthlyPass;
+        }
 
         // Create new session with the employee's assigned lot
         // Atomic capacity check happens at database level
         let newSession;
         try {
-            newSession = await sessionsRepo.startSession({
+            const startSessionPayload = {
                 lot_id: parkingLot.lot_id,
-                license_plate,
+                license_plate: license_plate || null,
                 vehicle_type,
                 is_monthly,
-            });
+            };
+
+            if (card_uid !== undefined) {
+                startSessionPayload.card_uid = card_uid;
+            }
+            if (etag_epc !== undefined) {
+                startSessionPayload.etag_epc = etag_epc;
+            }
+            if (entry_lane_id !== undefined) {
+                startSessionPayload.entry_lane_id = entry_lane_id;
+            }
+            if (image_in_url !== undefined) {
+                startSessionPayload.image_in_url = image_in_url;
+            }
+            if (metadata_in !== undefined) {
+                startSessionPayload.metadata_in = metadata_in;
+            }
+
+            newSession = await sessionsRepo.startSession(startSessionPayload);
         } catch (error) {
             // Handle unique constraint violation (duplicate active session)
-            if (error.code === "23505" && error.constraint === "uq_active_session_plate") {
+            if (
+                error.code === "23505" &&
+                [
+                    "uq_active_session_plate",
+                    "uq_active_session_card_uid",
+                    "uq_active_session_etag_epc",
+                ].includes(error.constraint)
+            ) {
                 return res.status(409).json({
                     success: false,
                     message: "This vehicle already has an active session",
+                });
+            }
+            if (error.code === "LOT_NOT_FOUND") {
+                return res.status(404).json({
+                    success: false,
+                    message: error.message || "Parking lot not found",
                 });
             }
             throw error; // Re-throw other errors
