@@ -5,6 +5,33 @@
  * hardcoded throughout the codebase. Allows easy modification and testing.
  */
 
+const parseIntOrDefault = (rawValue, defaultValue) => {
+    const parsedValue = parseInt(rawValue, 10);
+    return Number.isNaN(parsedValue) ? defaultValue : parsedValue;
+};
+
+const parseStrictBoundedIntOrDefault = (rawValue, defaultValue, minValue, maxValue) => {
+    if (rawValue === undefined || rawValue === null) {
+        return defaultValue;
+    }
+
+    const normalizedValue = String(rawValue).trim();
+    if (!/^\d+$/.test(normalizedValue)) {
+        return defaultValue;
+    }
+
+    const parsedValue = Number(normalizedValue);
+    if (!Number.isSafeInteger(parsedValue)) {
+        return defaultValue;
+    }
+
+    if (parsedValue < minValue || parsedValue > maxValue) {
+        return defaultValue;
+    }
+
+    return parsedValue;
+};
+
 // Session Configuration
 const SESSION_MAX_AGE_HOURS = parseInt(process.env.SESSION_MAX_AGE_HOURS || '8', 10);
 const SESSION_MAX_AGE_MS = SESSION_MAX_AGE_HOURS * 60 * 60 * 1000;
@@ -28,6 +55,21 @@ const LPD_DETECT_ENDPOINT = '/api/detect';
 const LPD_TIMEOUT_MS = parseInt(process.env.LPD_TIMEOUT || '30000', 10);
 const LPD_HEALTH_CHECK_TIMEOUT_MS = 5000;
 const LPD_DEFAULT_CONFIDENCE = 0.9;
+
+// Edge Ingest
+const EDGE_INGEST_API_KEY = process.env.EDGE_INGEST_API_KEY || '';
+const EDGE_LPD_CORRELATION_WINDOW_SECONDS = parseStrictBoundedIntOrDefault(
+    process.env.EDGE_LPD_CORRELATION_WINDOW_SECONDS,
+    5,
+    1,
+    300
+);
+const EDGE_MONITOR_DEFAULT_PAGE_SIZE = parseStrictBoundedIntOrDefault(
+    process.env.EDGE_MONITOR_DEFAULT_PAGE_SIZE,
+    20,
+    1,
+    200
+);
 
 // Guest Defaults for Lost Ticket
 const UNKNOWN_GUEST_IDENTIFIER = 'UNKNOWN';
@@ -70,6 +112,11 @@ module.exports = {
     LPD_TIMEOUT_MS,
     LPD_HEALTH_CHECK_TIMEOUT_MS,
     LPD_DEFAULT_CONFIDENCE,
+
+    // Edge Ingest
+    EDGE_INGEST_API_KEY,
+    EDGE_LPD_CORRELATION_WINDOW_SECONDS,
+    EDGE_MONITOR_DEFAULT_PAGE_SIZE,
 
     // Guest Defaults
     UNKNOWN_GUEST_IDENTIFIER,

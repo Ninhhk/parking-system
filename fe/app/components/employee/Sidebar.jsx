@@ -16,6 +16,7 @@ import {
     HiSpeakerphone,
     HiOutlineStatusOffline,
     HiOutlineClipboard,
+    HiOutlineLightningBolt,
 } from "react-icons/hi";
 import {
     HiCheckBadge,
@@ -62,6 +63,11 @@ const Sidebar = () => {
             name: "Lot Monitor",
             href: "/employee/monitor",
             icon: <HiOutlineClipboard className="mr-3 h-6 w-6" />,
+        },
+        {
+            name: "Edge Ops",
+            href: "/employee/edge-monitor",
+            icon: <HiOutlineLightningBolt className="mr-3 h-6 w-6" />,
         },
         {
             name: "Check-in",
