@@ -29,7 +29,6 @@ exports.startSession = async (sessionData) => {
         // If no rows updated, lot is at capacity
         if (capacityResult.rowCount === 0) {
             await client.query("ROLLBACK");
-            client.release();
             return null; // Signal capacity full to caller
         }
 

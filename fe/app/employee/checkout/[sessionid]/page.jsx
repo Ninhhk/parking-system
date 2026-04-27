@@ -36,6 +36,28 @@ const CARD_STATUS_LABELS = {
 
 const makeIdempotencyKey = (prefix, sessionId) => `${prefix}-${sessionId}-${Date.now()}`;
 
+const isFutureDate = (value) => {
+    if (!value) return false;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return false;
+    return date.getTime() > Date.now();
+};
+
+const amountsMatch = (left, right) => {
+    if (!Number.isFinite(Number(left)) || !Number.isFinite(Number(right))) {
+        return true;
+    }
+    return Math.round(Number(left)) === Math.round(Number(right));
+};
+
+const isReusableAttempt = ({ attempt, intentAmount, expectedAmount }) => {
+    if (!attempt) return false;
+    if (attempt.status !== "PENDING") return false;
+    if (!attempt.provider_order_code || !attempt.checkout_url) return false;
+    if (!isFutureDate(attempt.expires_at)) return false;
+    return amountsMatch(intentAmount, expectedAmount);
+};
+
 export default function PaymentDetailsPage() {
     const params = useParams();
     const sessionid = params.sessionid;
@@ -232,9 +254,23 @@ export default function PaymentDetailsPage() {
                 if (isCancelled) return;
 
                 const currentStatus = statusResult?.intent_status || statusResult?.status || "NOT_FOUND";
-                if (statusResult?.active_attempt) {
+                const activeAttempt = statusResult?.active_attempt || null;
+                const expectedAmount = getTotalAmount();
+                const comparableAmount = statusResult?.intent?.amount ?? activeAttempt?.amount;
+                const canReuse = isReusableAttempt({
+                    attempt: activeAttempt,
+                    intentAmount: comparableAmount,
+                    expectedAmount,
+                });
+
+                if (currentStatus === "PAID") {
                     applyIntentResult(statusResult, () => isCancelled || !isMountedRef.current);
-                } else if (["NOT_FOUND", "REQUIRES_PAYMENT_METHOD", "FAILED", "EXPIRED"].includes(currentStatus)) {
+                } else if (canReuse) {
+                    applyIntentResult(statusResult, () => isCancelled || !isMountedRef.current);
+                } else if (
+                    activeAttempt ||
+                    ["NOT_FOUND", "REQUIRES_PAYMENT_METHOD", "FAILED", "EXPIRED", "PENDING"].includes(currentStatus)
+                ) {
                     await ensureCardIntent({ forceNew: false, shouldCancel: () => isCancelled || !isMountedRef.current });
                 }
             } catch (err) {

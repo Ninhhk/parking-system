@@ -2,6 +2,8 @@ const request = require("supertest");
 const app = require("../../app");
 const { pool } = require("../../config/db");
 const sessionsRepo = require("../../repositories/employee.sessions.repo");
+const { hashPassword } = require("../../utils/pw");
+const { sanitizePlate } = require("../../utils/licensePlate");
 
 describe("Check-in Concurrency Tests", () => {
     let testLotId;
@@ -9,12 +11,14 @@ describe("Check-in Concurrency Tests", () => {
     let authCookie;
 
     beforeAll(async () => {
+        const passwordHash = await hashPassword("password123");
+
         // Create test user (employee)
         const userResult = await pool.query(
             `INSERT INTO users (username, password_hash, full_name, role) 
              VALUES ($1, $2, $3, $4) 
              RETURNING user_id`,
-            ["test_employee_concurrency", "hash", "Test Employee", "employee"]
+            ["test_employee_concurrency", passwordHash, "Test Employee", "employee"]
         );
         testUserId = userResult.rows[0].user_id;
 
@@ -40,7 +44,6 @@ describe("Check-in Concurrency Tests", () => {
         await pool.query("DELETE FROM parkingsessions WHERE lot_id = $1", [testLotId]);
         await pool.query("DELETE FROM parkinglots WHERE lot_id = $1", [testLotId]);
         await pool.query("DELETE FROM users WHERE user_id = $1", [testUserId]);
-        await pool.end();
     });
 
     afterEach(async () => {
@@ -176,13 +179,14 @@ describe("Check-in Concurrency Tests", () => {
             }
 
             const plate = "CONCURRENT123";
+            const normalizedPlate = sanitizePlate(plate);
 
             // Make multiple concurrent requests
             const requests = Array(5)
                 .fill(null)
                 .map(() =>
                     request(app)
-                        .post("/api/employee/sessions/checkin")
+                        .post("/api/employee/parking/entry")
                         .set("Cookie", authCookie)
                         .send({
                             license_plate: plate,
@@ -205,7 +209,7 @@ describe("Check-in Concurrency Tests", () => {
             // Verify only one session in database
             const sessions = await pool.query(
                 "SELECT COUNT(*) FROM parkingsessions WHERE license_plate = $1 AND time_out IS NULL",
-                [plate]
+                [normalizedPlate]
             );
             expect(parseInt(sessions.rows[0].count)).toBe(1);
         });
@@ -234,7 +238,7 @@ describe("Check-in Concurrency Tests", () => {
 
             // Try to check in one more car
             const res = await request(app)
-                .post("/api/employee/sessions/checkin")
+                .post("/api/employee/parking/entry")
                 .set("Cookie", authCookie)
                 .send({
                     license_plate: "FULL3",

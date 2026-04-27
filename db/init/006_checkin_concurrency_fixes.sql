@@ -4,15 +4,35 @@
 
 -- Add CHECK constraint for car capacity
 -- Ensures current_car never exceeds car_capacity and never goes negative
-ALTER TABLE parkinglots
-    ADD CONSTRAINT check_car_capacity
-    CHECK (current_car <= car_capacity AND current_car >= 0);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'check_car_capacity'
+          AND conrelid = 'parkinglots'::regclass
+    ) THEN
+        ALTER TABLE parkinglots
+            ADD CONSTRAINT check_car_capacity
+            CHECK (current_car <= car_capacity AND current_car >= 0);
+    END IF;
+END $$;
 
 -- Add CHECK constraint for bike capacity
 -- Ensures current_bike never exceeds bike_capacity and never goes negative
-ALTER TABLE parkinglots
-    ADD CONSTRAINT check_bike_capacity
-    CHECK (current_bike <= bike_capacity AND current_bike >= 0);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'check_bike_capacity'
+          AND conrelid = 'parkinglots'::regclass
+    ) THEN
+        ALTER TABLE parkinglots
+            ADD CONSTRAINT check_bike_capacity
+            CHECK (current_bike <= bike_capacity AND current_bike >= 0);
+    END IF;
+END $$;
 
 -- Note: These constraints complement the atomic capacity checks in the application layer
 -- They provide an additional safety layer in case of:
