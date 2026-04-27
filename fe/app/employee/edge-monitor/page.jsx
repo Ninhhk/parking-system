@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FaSync } from "react-icons/fa";
 
@@ -11,6 +11,7 @@ import {
 } from "../../api/edge.client";
 import { useToast } from "../../components/providers/ToastProvider";
 import { buildQueryFromFilters, parseFiltersFromSearch } from "./query";
+import { createPollingRunner } from "./polling";
 
 const POLL_MS = 10000;
 
@@ -51,6 +52,7 @@ function EdgeMonitorContent() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [retryingId, setRetryingId] = useState("");
+    const pollRunnerRef = useRef(null);
 
     const setFilters = useCallback(
         (nextFilters) => {
@@ -106,12 +108,18 @@ function EdgeMonitorContent() {
     );
 
     useEffect(() => {
+        pollRunnerRef.current = createPollingRunner(() => loadData({ silent: true }));
+    }, [loadData]);
+
+    useEffect(() => {
         loadData();
     }, [loadData]);
 
     useEffect(() => {
         const timer = setInterval(() => {
-            loadData({ silent: true });
+            if (pollRunnerRef.current) {
+                pollRunnerRef.current();
+            }
         }, POLL_MS);
 
         return () => clearInterval(timer);

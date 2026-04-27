@@ -109,7 +109,7 @@ exports.updateAfterRetry = async ({ eventId, status, sessionId, failureReason },
     return result.rows[0] || null;
 };
 
-exports.listEvents = async ({ status, lane, laneId, trigger, triggerType, from, to, page, pageSize } = {}, client = pool) => {
+exports.listEvents = async ({ status, lane, laneId, trigger, triggerType, from, to, q, page, pageSize } = {}, client = pool) => {
     const conditions = [];
     const params = [];
 
@@ -138,6 +138,18 @@ exports.listEvents = async ({ status, lane, laneId, trigger, triggerType, from, 
     if (to) {
         params.push(to);
         conditions.push(`occurred_at <= $${params.length}`);
+    }
+
+    if (q && String(q).trim().length > 0) {
+        const normalizedQuery = `%${String(q).trim()}%`;
+        params.push(normalizedQuery);
+        const qIndex = params.length;
+        conditions.push(`(
+            event_id ILIKE $${qIndex}
+            OR payload_json -> 'trigger' ->> 'value' ILIKE $${qIndex}
+            OR payload_json -> 'trigger' ->> 'plate' ILIKE $${qIndex}
+            OR payload_json ->> 'triggerValue' ILIKE $${qIndex}
+        )`);
     }
 
     const parsedPage = Number(page);

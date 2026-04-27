@@ -165,6 +165,7 @@ exports.listEvents = async (req, res) => {
             trigger: req.query.trigger,
             from: req.query.from,
             to: req.query.to,
+            q: req.query.q,
             page: req.query.page,
             pageSize: req.query.pageSize,
         });
