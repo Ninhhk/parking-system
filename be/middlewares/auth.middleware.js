@@ -8,7 +8,7 @@ function isAuthenticated(req, res, next) {
 }
 
 // Middleware kiểm tra quyền (role) của người dùng
-function hasRole(roles) {
+function hasAnyRole(roles) {
   return (req, res, next) => {
     if (req.session.user && roles.includes(req.session.user.role)) {
       return next();  // Nếu người dùng có quyền truy cập
@@ -16,6 +16,10 @@ function hasRole(roles) {
       return res.status(403).json({ message: 'Forbidden. You do not have the required permissions.' });  // Trả về lỗi nếu không có quyền
     }
   };
+}
+
+function hasRole(roles) {
+  return hasAnyRole(roles);
 }
 
 // Middleware to check if user is already logged in
@@ -29,4 +33,4 @@ function isNotAuthenticated(req, res, next) {
   next();
 }
 
-module.exports = { isAuthenticated, hasRole, isNotAuthenticated };
+module.exports = { isAuthenticated, hasRole, hasAnyRole, isNotAuthenticated };
