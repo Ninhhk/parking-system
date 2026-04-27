@@ -10,6 +10,7 @@ const monitorController = require("../controllers/employee.monitor.controller");
 const profileController = require("../controllers/employee.profile.controller");
 const lpdController = require("../controllers/employee.lpd.controller");
 const employeePaymentController = require("../controllers/employee.payment.controller");
+const edgeController = require("../controllers/employee.edge.controller");
 
 router.use(authMiddleware.isAuthenticated, authMiddleware.hasRole(["employee"]));
 
@@ -40,6 +41,7 @@ router.post(
     employeePaymentController.regenerateIntent
 );
 router.get("/parking/exit/:session_id/payment-status", employeePaymentController.getPaymentStatus);
+router.post("/parking/edge/checkin-event", edgeController.ingestCheckinEvent);
 
 // Profile routes
 router.get("/profile", profileController.getMyProfile);

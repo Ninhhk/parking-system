@@ -3,82 +3,26 @@ const { getToday } = require("../utils/date");
 const feeConfigRepo = require("./admin.feeConfig.repo");
 const { DEFAULT_PENALTY_FEE, UNKNOWN_GUEST_IDENTIFIER } = require("../config/constants");
 
-let parkingSessionsColumnsPromise = null;
-
-const getParkingSessionsColumns = async () => {
-    if (!parkingSessionsColumnsPromise) {
-        parkingSessionsColumnsPromise = pool
-            .query(
-                `SELECT column_name
-                 FROM information_schema.columns
-                 WHERE table_schema = 'public'
-                   AND table_name = 'parkingsessions'`
-            )
-            .then((result) => new Set(result.rows.map((row) => row.column_name)))
-            .catch((error) => {
-                parkingSessionsColumnsPromise = null;
-                throw error;
-            });
-    }
-
-    return parkingSessionsColumnsPromise;
-};
-
-const getSessionInsertDefinition = async () => {
-    const columns = await getParkingSessionsColumns();
-    const fields = ["lot_id", "license_plate", "vehicle_type", "is_monthly"];
-    const values = ["lot_id", "license_plate", "vehicle_type", "is_monthly"];
-
-    if (columns.has("card_uid")) {
-        fields.push("card_uid");
-        values.push("card_uid");
-    }
-
-    if (columns.has("etag_epc")) {
-        fields.push("etag_epc");
-        values.push("etag_epc");
-    }
-
-    if (columns.has("entry_lane_id")) {
-        fields.push("entry_lane_id");
-        values.push("entry_lane_id");
-    }
-
-    if (columns.has("image_in_url")) {
-        fields.push("image_in_url");
-        values.push("image_in_url");
-    }
-
-    if (columns.has("metadata_in")) {
-        fields.push("metadata_in");
-        values.push("metadata_in_json");
-    }
-
-    fields.push("time_in");
-    fields.push("parking_fee");
-
-    return { fields, values, columns };
-};
-
-exports.startSession = async (sessionData, client) => {
-    const transactionClient = client || (await pool.connect());
-    const ownsTransaction = !client;
+exports.startSession = async (sessionData, options = {}) => {
+    const externalClient = options.client || null;
+    const client = externalClient || (await pool.connect());
+    const manageTransaction = !externalClient;
 
     try {
-        if (ownsTransaction) {
-            await transactionClient.query("BEGIN");
+        if (manageTransaction) {
+            await client.query("BEGIN");
         }
 
         const {
             lot_id,
-            license_plate,
+            license_plate = null,
+            card_uid = null,
+            etag_epc = null,
+            entry_lane_id = null,
+            image_in_url = null,
+            metadata_in = {},
             vehicle_type,
             is_monthly,
-            card_uid,
-            etag_epc,
-            entry_lane_id,
-            image_in_url,
-            metadata_in,
         } = sessionData;
 
         // Atomic capacity check: Update parking lot count with capacity constraint
@@ -95,10 +39,21 @@ exports.startSession = async (sessionData, client) => {
 
         const capacityResult = await transactionClient.query(updateLotQuery, [lot_id]);
 
-        // If no rows updated, lot is at capacity
+        // If no rows updated, lot may be missing or at capacity
         if (capacityResult.rowCount === 0) {
-            if (ownsTransaction) {
-                await transactionClient.query("ROLLBACK");
+            const lotExistsResult = await client.query(
+                "SELECT 1 FROM ParkingLots WHERE lot_id = $1",
+                [lot_id]
+            );
+
+            if (lotExistsResult.rowCount === 0) {
+                const lotNotFoundError = new Error("Parking lot not found");
+                lotNotFoundError.code = "LOT_NOT_FOUND";
+                throw lotNotFoundError;
+            }
+
+            if (manageTransaction) {
+                await client.query("ROLLBACK");
             }
             return null; // Signal capacity full to caller
         }
@@ -119,34 +74,99 @@ exports.startSession = async (sessionData, client) => {
         const placeholders = insertDefinition.values.map((_, index) => `$${index + 1}`).join(", ");
         const query = `
             INSERT INTO ParkingSessions (
-                ${insertDefinition.fields.join(", ")}
-            ) VALUES (
-                ${placeholders}, NOW(), 0
-            )
+                lot_id,
+                license_plate,
+                card_uid,
+                etag_epc,
+                entry_lane_id,
+                image_in_url,
+                metadata_in,
+                vehicle_type,
+                is_monthly,
+                time_in,
+                parking_fee
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, NOW(), 0)
             RETURNING *
         `;
 
-        const params = insertDefinition.values.map((key) => insertParams[key]);
-        const result = await transactionClient.query(query, params);
+        const result = await client.query(query, [
+            lot_id,
+            license_plate,
+            card_uid,
+            etag_epc,
+            entry_lane_id,
+            image_in_url,
+            JSON.stringify(metadata_in),
+            vehicle_type,
+            is_monthly,
+        ]);
 
         // Commit the transaction
-        if (ownsTransaction) {
-            await transactionClient.query("COMMIT");
+        if (manageTransaction) {
+            await client.query("COMMIT");
         }
 
         return result.rows[0];
     } catch (error) {
         // Rollback in case of error
-        if (ownsTransaction) {
-            await transactionClient.query("ROLLBACK");
+        if (manageTransaction) {
+            try {
+                await client.query("ROLLBACK");
+            } catch (_rollbackError) {
+            }
         }
         throw error;
     } finally {
         // Release the client
-        if (ownsTransaction) {
-            transactionClient.release();
+        if (manageTransaction) {
+            client.release();
         }
     }
+};
+
+exports.enrichRecentSessionByLane = async ({
+    entry_lane_id,
+    license_plate = null,
+    image_in_url = null,
+    metadata_patch = {},
+    window_seconds = 5,
+}, options = {}) => {
+    // Caller should serialize by lane (e.g. advisory lock) to avoid race updates.
+    if (!entry_lane_id) {
+        return null;
+    }
+
+    const queryClient = options.client || pool;
+
+    const query = `
+        WITH candidate AS (
+            SELECT session_id
+            FROM ParkingSessions
+            WHERE entry_lane_id = $1
+              AND time_out IS NULL
+              AND time_in >= NOW() - ($5::text || ' seconds')::interval
+            ORDER BY time_in DESC
+            LIMIT 1
+        )
+        UPDATE ParkingSessions ps
+        SET
+            license_plate = COALESCE(ps.license_plate, $2),
+            image_in_url = COALESCE(ps.image_in_url, $3),
+            metadata_in = COALESCE(ps.metadata_in, '{}'::jsonb) || COALESCE($4::jsonb, '{}'::jsonb)
+        FROM candidate
+        WHERE ps.session_id = candidate.session_id
+        RETURNING ps.*
+    `;
+
+    const result = await queryClient.query(query, [
+        entry_lane_id,
+        license_plate,
+        image_in_url,
+        JSON.stringify(metadata_patch),
+        window_seconds,
+    ]);
+
+    return result.rows[0] || null;
 };
 
 exports.getSession = async (sessionId) => {
