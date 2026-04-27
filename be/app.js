@@ -1,19 +1,21 @@
+const dotenv = require("dotenv");
+
+// Load environment variables before importing modules that read process.env at require-time
+dotenv.config();
+
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
-const dotenv = require("dotenv");
 const session = require("express-session");
 const { connectDB } = require("./config/db");
 const { SESSION_MAX_AGE_MS } = require("./config/constants");
-
-// Load environment variables
-dotenv.config();
 
 // Import routes
 const authRoutes = require("./routes/auth.routes");
 const adminRoutes = require("./routes/admin.routes");
 const employeeRoutes = require("./routes/employee.routes");
 const paymentRoutes = require("./routes/payment.routes");
+const edgeRoutes = require("./routes/edge.routes");
 
 // Initialize express app
 const app = express();
@@ -37,7 +39,7 @@ app.use(
         origin: allowedOrigins,
         credentials: true,
         methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"],
+        allowedHeaders: ["Content-Type", "Authorization", "x-edge-api-key"],
     })
 );
 app.use(express.json({ limit: "10mb" }));
@@ -68,6 +70,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/employee", employeeRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/edge", edgeRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -80,9 +83,8 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const PORT = process.env.PORT;
-
 if (require.main === module) {
+    const PORT = process.env.PORT;
     app.listen(PORT, () => {
         console.log(`Server is running on http://localhost:${PORT}`);
     });

@@ -3,14 +3,27 @@ const { getToday } = require("../utils/date");
 const feeConfigRepo = require("./admin.feeConfig.repo");
 const { DEFAULT_PENALTY_FEE, UNKNOWN_GUEST_IDENTIFIER } = require("../config/constants");
 
-exports.startSession = async (sessionData) => {
-    // Start a transaction
-    const client = await pool.connect();
+exports.startSession = async (sessionData, options = {}) => {
+    const externalClient = options.client || null;
+    const client = externalClient || (await pool.connect());
+    const manageTransaction = !externalClient;
 
     try {
-        await client.query("BEGIN");
+        if (manageTransaction) {
+            await client.query("BEGIN");
+        }
 
-        const { lot_id, license_plate, vehicle_type, is_monthly } = sessionData;
+        const {
+            lot_id,
+            license_plate = null,
+            card_uid = null,
+            etag_epc = null,
+            entry_lane_id = null,
+            image_in_url = null,
+            metadata_in = {},
+            vehicle_type,
+            is_monthly,
+        } = sessionData;
 
         // Atomic capacity check: Update parking lot count with capacity constraint
         const column = vehicle_type.toLowerCase() === "car" ? "current_car" : "current_bike";
@@ -24,41 +37,136 @@ exports.startSession = async (sessionData) => {
             RETURNING *
         `;
 
-        const capacityResult = await client.query(updateLotQuery, [lot_id]);
+        const capacityResult = await transactionClient.query(updateLotQuery, [lot_id]);
 
-        // If no rows updated, lot is at capacity
+        // If no rows updated, lot may be missing or at capacity
         if (capacityResult.rowCount === 0) {
-            await client.query("ROLLBACK");
+            const lotExistsResult = await client.query(
+                "SELECT 1 FROM ParkingLots WHERE lot_id = $1",
+                [lot_id]
+            );
+
+            if (lotExistsResult.rowCount === 0) {
+                const lotNotFoundError = new Error("Parking lot not found");
+                lotNotFoundError.code = "LOT_NOT_FOUND";
+                throw lotNotFoundError;
+            }
+
+            if (manageTransaction) {
+                await client.query("ROLLBACK");
+            }
             return null; // Signal capacity full to caller
         }
 
-        // Insert the new session - added parking_fee with default value of 0
+        const insertDefinition = await getSessionInsertDefinition();
+        const insertParams = {
+            lot_id,
+            license_plate,
+            vehicle_type,
+            is_monthly,
+            card_uid: card_uid || null,
+            etag_epc: etag_epc || null,
+            entry_lane_id: entry_lane_id || null,
+            image_in_url: image_in_url || null,
+            metadata_in_json: metadata_in ? JSON.stringify(metadata_in) : "{}",
+        };
+
+        const placeholders = insertDefinition.values.map((_, index) => `$${index + 1}`).join(", ");
         const query = `
             INSERT INTO ParkingSessions (
                 lot_id,
                 license_plate,
+                card_uid,
+                etag_epc,
+                entry_lane_id,
+                image_in_url,
+                metadata_in,
                 vehicle_type,
                 is_monthly,
                 time_in,
                 parking_fee
-            ) VALUES ($1, $2, $3, $4, NOW(), 0)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, NOW(), 0)
             RETURNING *
         `;
 
-        const result = await client.query(query, [lot_id, license_plate, vehicle_type, is_monthly]);
+        const result = await client.query(query, [
+            lot_id,
+            license_plate,
+            card_uid,
+            etag_epc,
+            entry_lane_id,
+            image_in_url,
+            JSON.stringify(metadata_in),
+            vehicle_type,
+            is_monthly,
+        ]);
 
         // Commit the transaction
-        await client.query("COMMIT");
+        if (manageTransaction) {
+            await client.query("COMMIT");
+        }
 
         return result.rows[0];
     } catch (error) {
         // Rollback in case of error
-        await client.query("ROLLBACK");
+        if (manageTransaction) {
+            try {
+                await client.query("ROLLBACK");
+            } catch (_rollbackError) {
+            }
+        }
         throw error;
     } finally {
         // Release the client
-        client.release();
+        if (manageTransaction) {
+            client.release();
+        }
     }
+};
+
+exports.enrichRecentSessionByLane = async ({
+    entry_lane_id,
+    license_plate = null,
+    image_in_url = null,
+    metadata_patch = {},
+    window_seconds = 5,
+}, options = {}) => {
+    // Caller should serialize by lane (e.g. advisory lock) to avoid race updates.
+    if (!entry_lane_id) {
+        return null;
+    }
+
+    const queryClient = options.client || pool;
+
+    const query = `
+        WITH candidate AS (
+            SELECT session_id
+            FROM ParkingSessions
+            WHERE entry_lane_id = $1
+              AND time_out IS NULL
+              AND time_in >= NOW() - ($5::text || ' seconds')::interval
+            ORDER BY time_in DESC
+            LIMIT 1
+        )
+        UPDATE ParkingSessions ps
+        SET
+            license_plate = COALESCE(ps.license_plate, $2),
+            image_in_url = COALESCE(ps.image_in_url, $3),
+            metadata_in = COALESCE(ps.metadata_in, '{}'::jsonb) || COALESCE($4::jsonb, '{}'::jsonb)
+        FROM candidate
+        WHERE ps.session_id = candidate.session_id
+        RETURNING ps.*
+    `;
+
+    const result = await queryClient.query(query, [
+        entry_lane_id,
+        license_plate,
+        image_in_url,
+        JSON.stringify(metadata_patch),
+        window_seconds,
+    ]);
+
+    return result.rows[0] || null;
 };
 
 exports.getSession = async (sessionId) => {
@@ -291,6 +399,55 @@ exports.getActiveSessionsByLot = async (lotId) => {
     return result.rows;
 };
 
+exports.getActiveSessionsForOps = async ({ laneId, q, page, pageSize } = {}, client = pool) => {
+    const conditions = ["ps.time_out IS NULL"];
+    const params = [];
+    const columns = await getParkingSessionsColumns();
+
+    if (laneId && columns.has("entry_lane_id")) {
+        params.push(String(laneId).trim());
+        conditions.push(`ps.entry_lane_id = $${params.length}`);
+    }
+
+    if (q && String(q).trim().length > 0) {
+        const normalizedQuery = `%${String(q).trim()}%`;
+        params.push(normalizedQuery);
+        const qIndex = params.length;
+
+        const searchConditions = [`ps.license_plate ILIKE $${qIndex}`];
+        if (columns.has("card_uid")) {
+            searchConditions.push(`ps.card_uid ILIKE $${qIndex}`);
+        }
+        if (columns.has("etag_epc")) {
+            searchConditions.push(`ps.etag_epc ILIKE $${qIndex}`);
+        }
+
+        conditions.push(`(${searchConditions.join(" OR ")})`);
+    }
+
+    const parsedPage = Number(page);
+    const parsedPageSize = Number(pageSize);
+    const normalizedPage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    const normalizedPageSize = Number.isInteger(parsedPageSize) && parsedPageSize > 0 ? Math.min(parsedPageSize, 100) : 20;
+
+    params.push(normalizedPageSize);
+    const limitIndex = params.length;
+    params.push((normalizedPage - 1) * normalizedPageSize);
+    const offsetIndex = params.length;
+
+    const result = await client.query(
+        `SELECT ps.*
+         FROM ParkingSessions ps
+         WHERE ${conditions.join(" AND ")}
+         ORDER BY ps.time_in DESC, ps.session_id DESC
+         LIMIT $${limitIndex}
+         OFFSET $${offsetIndex}`,
+        params
+    );
+
+    return result.rows;
+};
+
 // Employee reports a lost ticket (standalone, not during checkout)
 exports.reportLostTicket = async ({ session_id, guest_identification, guest_phone }) => {
     // Get session info to determine ticket_type and vehicle_type
@@ -352,4 +509,136 @@ exports.clearLostTicketStatus = async (session_id) => {
     const query = `UPDATE ParkingSessions SET is_lost = false WHERE session_id = $1`;
     const result = await pool.query(query, [session_id]);
     return result.rowCount > 0;
+};
+
+exports.findActiveByCardUid = async (cardUid, client = pool) => {
+    if (!cardUid) {
+        return null;
+    }
+
+    const columns = await getParkingSessionsColumns();
+    if (!columns.has("card_uid")) {
+        return null;
+    }
+
+    const result = await client.query(
+        `SELECT * FROM ParkingSessions
+         WHERE card_uid = $1
+           AND time_out IS NULL
+         ORDER BY time_in DESC
+         LIMIT 1`,
+        [cardUid]
+    );
+
+    return result.rows[0] || null;
+};
+
+exports.findActiveByEtagEpc = async (etagEpc, client = pool) => {
+    if (!etagEpc) {
+        return null;
+    }
+
+    const columns = await getParkingSessionsColumns();
+    if (!columns.has("etag_epc")) {
+        return null;
+    }
+
+    const result = await client.query(
+        `SELECT * FROM ParkingSessions
+         WHERE etag_epc = $1
+           AND time_out IS NULL
+         ORDER BY time_in DESC
+         LIMIT 1`,
+        [etagEpc]
+    );
+
+    return result.rows[0] || null;
+};
+
+exports.findActiveByPlate = async (plate, client = pool) => {
+    if (!plate) {
+        return null;
+    }
+
+    const result = await client.query(
+        `SELECT * FROM ParkingSessions
+         WHERE license_plate = $1
+           AND time_out IS NULL
+         ORDER BY time_in DESC
+         LIMIT 1`,
+        [plate]
+    );
+
+    return result.rows[0] || null;
+};
+
+exports.enrichRecentSessionByLane = async (
+    { laneId, plate, imageInUrl, metadataPatch, windowSeconds },
+    client = pool
+) => {
+    if (!laneId) {
+        return null;
+    }
+
+    const columns = await getParkingSessionsColumns();
+    if (!columns.has("entry_lane_id")) {
+        return null;
+    }
+
+    const conditions = ["time_out IS NULL"];
+    const params = [];
+
+    params.push(laneId);
+    conditions.push(`entry_lane_id = $${params.length}`);
+
+    if (plate) {
+        params.push(plate);
+        conditions.push(`license_plate = $${params.length}`);
+    }
+
+    const normalizedWindowSeconds =
+        Number.isInteger(windowSeconds) && windowSeconds > 0 ? windowSeconds : 120;
+    params.push(normalizedWindowSeconds);
+    conditions.push(`time_in >= NOW() - ($${params.length} * INTERVAL '1 second')`);
+
+    const setClauses = [];
+
+    if (columns.has("image_in_url") && imageInUrl !== undefined) {
+        params.push(imageInUrl || null);
+        setClauses.push(`image_in_url = $${params.length}`);
+    }
+
+    if (columns.has("metadata_in") && metadataPatch !== undefined) {
+        params.push(JSON.stringify(metadataPatch || {}));
+        setClauses.push(
+            `metadata_in = COALESCE(metadata_in, '{}'::jsonb) || COALESCE($${params.length}::jsonb, '{}'::jsonb)`
+        );
+    }
+
+    if (setClauses.length === 0) {
+        return null;
+    }
+
+    try {
+        const result = await client.query(
+            `UPDATE ParkingSessions
+             SET ${setClauses.join(", ")}
+             WHERE session_id = (
+                 SELECT session_id
+                 FROM ParkingSessions
+                 WHERE ${conditions.join(" AND ")}
+                 ORDER BY time_in DESC
+                 LIMIT 1
+             )
+             RETURNING *`,
+            params
+        );
+
+        return result.rows[0] || null;
+    } catch (error) {
+        if (error && error.code === "42703") {
+            return null;
+        }
+        throw error;
+    }
 };
