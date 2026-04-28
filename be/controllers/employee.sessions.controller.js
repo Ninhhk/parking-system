@@ -3,7 +3,12 @@ const feeConfigRepo = require("../repositories/admin.feeConfig.repo");
 const lotsRepo = require("../repositories/admin.lots.repo");
 const { getToday } = require("../utils/date");
 const { calculateAndValidateFee } = require("../services/feeCalculation.service");
-const { LICENSE_PLATE_REGEX, VALID_PAYMENT_METHODS } = require("../config/constants");
+const {
+    LICENSE_PLATE_REGEX,
+    VALID_PAYMENT_METHODS,
+    VALID_VEHICLE_TYPES,
+    RFID_CHECKIN_ENABLED,
+} = require("../config/constants");
 const checkoutService = require("../services/checkout.service");
 
 // Vehicle Entry - Create a new parking session
@@ -161,6 +166,138 @@ exports.checkInVehicle = async (req, res) => {
         });
     } catch (error) {
         console.error("Check-in vehicle error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+};
+
+exports.checkInByRfid = async (req, res) => {
+    try {
+        if (!RFID_CHECKIN_ENABLED) {
+            return res.status(503).json({
+                success: false,
+                message: "RFID check-in is currently disabled",
+            });
+        }
+
+        const {
+            card_uid,
+            etag_epc,
+            entry_lane_id,
+            image_in_url,
+            metadata_in,
+            vehicle_type,
+        } = req.body;
+
+        if (!card_uid || !vehicle_type) {
+            return res.status(422).json({
+                success: false,
+                message: "Missing required fields",
+            });
+        }
+
+        if (!VALID_VEHICLE_TYPES.includes(vehicle_type)) {
+            return res.status(422).json({
+                success: false,
+                message: "Invalid vehicle type",
+            });
+        }
+
+        const userId = req.session.user.user_id;
+        const assignedLot = await lotsRepo.getParkingLotByManager(userId);
+
+        let parkingLot;
+
+        if (assignedLot) {
+            parkingLot = assignedLot;
+        } else {
+            const allLots = await lotsRepo.getAllParkingLots();
+            if (allLots && allLots.length > 0) {
+                parkingLot = allLots[0];
+            } else {
+                return res.status(404).json({
+                    success: false,
+                    message: "No parking lots available",
+                });
+            }
+        }
+
+        if (!parkingLot) {
+            return res.status(404).json({
+                success: false,
+                message: "No parking lot found for the employee",
+            });
+        }
+
+        let newSession;
+        try {
+            const startSessionPayload = {
+                lot_id: parkingLot.lot_id,
+                license_plate: null,
+                card_uid,
+                vehicle_type,
+                is_monthly: false,
+            };
+
+            if (etag_epc !== undefined) {
+                startSessionPayload.etag_epc = etag_epc;
+            }
+            if (entry_lane_id !== undefined) {
+                startSessionPayload.entry_lane_id = entry_lane_id;
+            }
+            if (image_in_url !== undefined) {
+                startSessionPayload.image_in_url = image_in_url;
+            }
+            if (metadata_in !== undefined) {
+                startSessionPayload.metadata_in = metadata_in;
+            }
+
+            newSession = await sessionsRepo.startSession(startSessionPayload);
+        } catch (error) {
+            if (
+                error.code === "23505" &&
+                ["uq_active_session_card_uid", "uq_active_session_etag_epc"].includes(error.constraint)
+            ) {
+                return res.status(409).json({
+                    success: false,
+                    message: "This vehicle already has an active session",
+                });
+            }
+            if (error.code === "LOT_NOT_FOUND") {
+                return res.status(404).json({
+                    success: false,
+                    message: error.message || "Parking lot not found",
+                });
+            }
+            throw error;
+        }
+
+        if (!newSession) {
+            return res.status(409).json({
+                success: false,
+                message: `Parking lot is full for ${vehicle_type.toLowerCase()}s`,
+            });
+        }
+
+        const ticket = {
+            session_id: newSession.session_id,
+            license_plate: newSession.license_plate,
+            vehicle_type: newSession.vehicle_type,
+            time_in: newSession.time_in,
+            is_monthly: newSession.is_monthly,
+            lot_id: newSession.lot_id,
+            lot_name: parkingLot.lot_name,
+        };
+
+        res.status(201).json({
+            success: true,
+            message: "Vehicle checked in successfully",
+            ticket,
+        });
+    } catch (error) {
+        console.error("Check-in by RFID error:", error);
         res.status(500).json({
             success: false,
             message: "Internal server error",
