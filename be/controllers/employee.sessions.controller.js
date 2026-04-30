@@ -224,35 +224,19 @@ exports.checkInByRfid = async (req, res) => {
             }
         }
 
-        if (!parkingLot) {
-            return res.status(404).json({
-                success: false,
-                message: "No parking lot found for the employee",
-            });
-        }
-
         let newSession;
         try {
+            const optionalFields = { etag_epc, entry_lane_id, image_in_url, metadata_in };
             const startSessionPayload = {
                 lot_id: parkingLot.lot_id,
                 license_plate: null,
                 card_uid,
                 vehicle_type,
                 is_monthly: false,
+                ...Object.fromEntries(
+                    Object.entries(optionalFields).filter(([, v]) => v !== undefined)
+                ),
             };
-
-            if (etag_epc !== undefined) {
-                startSessionPayload.etag_epc = etag_epc;
-            }
-            if (entry_lane_id !== undefined) {
-                startSessionPayload.entry_lane_id = entry_lane_id;
-            }
-            if (image_in_url !== undefined) {
-                startSessionPayload.image_in_url = image_in_url;
-            }
-            if (metadata_in !== undefined) {
-                startSessionPayload.metadata_in = metadata_in;
-            }
 
             newSession = await sessionsRepo.startSession(startSessionPayload);
         } catch (error) {
@@ -305,7 +289,6 @@ exports.checkInByRfid = async (req, res) => {
     }
 };
 
-// Vehicle Exit - Stage 1: Get session info for checkout (READ-ONLY)
 // Vehicle Exit - Stage 1: Get session info for checkout (READ-ONLY)
 exports.initiateCheckout = async (req, res) => {
     try {

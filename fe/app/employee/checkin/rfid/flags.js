@@ -18,7 +18,7 @@ export const RFID_KIOSK_FLAG_DEFAULTS = {
 };
 
 function parseBooleanFlag(value, defaultValue) {
-    if (value === undefined || value === null) {
+    if (value == null) {
         return defaultValue;
     }
 

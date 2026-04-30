@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { checkInByRfid } from "@/app/api/employee.client";
 import { getRfidKioskFlags } from "./flags";
 import {
@@ -28,6 +28,7 @@ export default function RfidKioskPage() {
     const [resultDetail, setResultDetail] = useState("");
     const [ticket, setTicket] = useState(null);
     const [events, setEvents] = useState([]);
+    const eventIdRef = useRef(0);
 
     if (missingRequiredModules.length > 0) {
         return (
@@ -53,7 +54,7 @@ export default function RfidKioskPage() {
     const addEvent = (text) => {
         setEvents((previous) => [
             {
-                id: `${Date.now()}-${Math.random()}`,
+                id: ++eventIdRef.current,
                 text,
             },
             ...previous,

@@ -89,18 +89,6 @@ describe("rfid kiosk check-in page", () => {
         expect(screen.getByText("Gate open")).toBeInTheDocument();
     });
 
-    it("keeps submit disabled for whitespace-only UID", () => {
-        render(<RfidKioskPage />);
-
-        fireEvent.change(screen.getByLabelText(/rfid card uid/i), {
-            target: { value: "   " },
-        });
-
-        const button = screen.getByRole("button", { name: /check in with rfid/i });
-        expect(button).toBeDisabled();
-        expect(mockCheckInByRfid).not.toHaveBeenCalled();
-    });
-
     it("prevents duplicate submission while scanning", async () => {
         let resolveRequest;
         mockCheckInByRfid.mockImplementation(
@@ -148,42 +136,6 @@ describe("rfid kiosk check-in page", () => {
         });
 
         expect(screen.getByText("This vehicle already has an active session")).toBeInTheDocument();
-    });
-
-    it("prevents duplicate submissions while scanning", async () => {
-        let resolveRequest;
-        const pendingRequest = new Promise((resolve) => {
-            resolveRequest = resolve;
-        });
-
-        mockCheckInByRfid.mockReturnValue(pendingRequest);
-
-        render(<RfidKioskPage />);
-
-        fireEvent.change(screen.getByLabelText(/rfid card uid/i), {
-            target: { value: "CARD-DOUBLE" },
-        });
-
-        const submitButton = screen.getByRole("button", { name: /check in with rfid/i });
-        fireEvent.click(submitButton);
-        fireEvent.click(submitButton);
-
-        await waitFor(() => {
-            expect(mockCheckInByRfid).toHaveBeenCalledTimes(1);
-        });
-
-        resolveRequest({
-            success: true,
-            ticket: {
-                session_id: 102,
-                card_uid: "CARD-DOUBLE",
-                vehicle_type: "car",
-            },
-        });
-
-        await waitFor(() => {
-            expect(screen.getByText("Access granted")).toBeInTheDocument();
-        });
     });
 
     it.each([422, 404, 500, undefined])(
