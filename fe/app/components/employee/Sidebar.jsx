@@ -75,6 +75,11 @@ const Sidebar = () => {
             icon: <HiOutlineArrowRightEndOnRectangle className="mr-3 h-6 w-6" />,
         },
         {
+            name: "RFID Check-in",
+            href: "/employee/checkin/rfid",
+            icon: <HiIdentification className="mr-3 h-6 w-6" />,
+        },
+        {
             name: "Check-out",
             href: "/employee/checkout",
             icon: <HiOutlineArrowLeftEndOnRectangle className="mr-3 h-6 w-6" />,

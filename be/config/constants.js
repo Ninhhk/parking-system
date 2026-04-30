@@ -87,6 +87,7 @@ const PAYOS_QR_TTL_MINUTES = parseInt(process.env.PAYOS_QR_TTL_MINUTES || '15', 
 
 // Feature Flags
 const PAYMENT_INTENT_V2_ENABLED = String(process.env.PAYMENT_INTENT_V2_ENABLED || 'true') === 'true';
+const RFID_CHECKIN_ENABLED = String(process.env.RFID_CHECKIN_ENABLED || 'true') === 'true';
 
 module.exports = {
     // Session
@@ -132,4 +133,5 @@ module.exports = {
 
     // Feature Flags
     PAYMENT_INTENT_V2_ENABLED,
+    RFID_CHECKIN_ENABLED,
 };

@@ -33,6 +33,11 @@ export async function checkInVehicle(sessionData) {
     return res.data;
 }
 
+export async function checkInByRfid(sessionData) {
+    const res = await api.post("/employee/parking/entry/rfid", sessionData);
+    return res.data;
+}
+
 // Initiate check-out process (Exit Stage 1) - Just gets preliminary information, no DB updates
 export async function initiateCheckout(sessionId) {
     const res = await api.get(`/employee/parking/exit/${sessionId}`);
