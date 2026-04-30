@@ -72,3 +72,6 @@ document
 .worktrees/
 AGENTS.md
 .github
+skills-lock.json
+.kiro/
+runs

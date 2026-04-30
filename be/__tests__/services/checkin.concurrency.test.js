@@ -3,6 +3,7 @@ const app = require("../../app");
 const { pool } = require("../../config/db");
 const sessionsRepo = require("../../repositories/employee.sessions.repo");
 const edgeCheckinService = require("../../services/edge.checkin.service");
+const { sanitizePlate } = require("../../utils/licensePlate");
 const { hashPassword } = require("../../utils/pw");
 
 describe("Check-in Concurrency Tests", () => {
@@ -92,12 +93,12 @@ describe("Check-in Concurrency Tests", () => {
             expect(columnsByName.metadata_in).toBeDefined();
             expect(columnsByName.metadata_in.data_type).toBe("jsonb");
             expect(columnsByName.metadata_in.udt_name).toBe("jsonb");
-            expect(columnsByName.metadata_in.column_default).toContain("{}::jsonb");
+            expect(columnsByName.metadata_in.column_default).toContain("'{}'::jsonb");
 
             expect(columnsByName.metadata_out).toBeDefined();
             expect(columnsByName.metadata_out.data_type).toBe("jsonb");
             expect(columnsByName.metadata_out.udt_name).toBe("jsonb");
-            expect(columnsByName.metadata_out.column_default).toContain("{}::jsonb");
+            expect(columnsByName.metadata_out.column_default).toContain("'{}'::jsonb");
         });
 
         test("parkingsessions includes required partial indexes for hybrid check-in", async () => {

@@ -3,8 +3,27 @@ const { getToday } = require("../utils/date");
 const feeConfigRepo = require("./admin.feeConfig.repo");
 const { DEFAULT_PENALTY_FEE, UNKNOWN_GUEST_IDENTIFIER } = require("../config/constants");
 
+let parkingSessionsColumnsCache = null;
+
+async function getParkingSessionsColumns(client = pool) {
+    if (parkingSessionsColumnsCache) {
+        return parkingSessionsColumnsCache;
+    }
+
+    const result = await client.query(
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'parkingsessions'`
+    );
+
+    parkingSessionsColumnsCache = new Set(result.rows.map((row) => row.column_name));
+    return parkingSessionsColumnsCache;
+}
+
 exports.startSession = async (sessionData, options = {}) => {
-    const externalClient = options.client || null;
+    const externalClient =
+        options && typeof options.query === "function" ? options : options.client || null;
     const client = externalClient || (await pool.connect());
     const manageTransaction = !externalClient;
 
@@ -37,7 +56,7 @@ exports.startSession = async (sessionData, options = {}) => {
             RETURNING *
         `;
 
-        const capacityResult = await transactionClient.query(updateLotQuery, [lot_id]);
+        const capacityResult = await client.query(updateLotQuery, [lot_id]);
 
         // If no rows updated, lot may be missing or at capacity
         if (capacityResult.rowCount === 0) {
@@ -58,20 +77,6 @@ exports.startSession = async (sessionData, options = {}) => {
             return null; // Signal capacity full to caller
         }
 
-        const insertDefinition = await getSessionInsertDefinition();
-        const insertParams = {
-            lot_id,
-            license_plate,
-            vehicle_type,
-            is_monthly,
-            card_uid: card_uid || null,
-            etag_epc: etag_epc || null,
-            entry_lane_id: entry_lane_id || null,
-            image_in_url: image_in_url || null,
-            metadata_in_json: metadata_in ? JSON.stringify(metadata_in) : "{}",
-        };
-
-        const placeholders = insertDefinition.values.map((_, index) => `$${index + 1}`).join(", ");
         const query = `
             INSERT INTO ParkingSessions (
                 lot_id,
@@ -572,10 +577,21 @@ exports.findActiveByPlate = async (plate, client = pool) => {
     return result.rows[0] || null;
 };
 
-exports.enrichRecentSessionByLane = async (
-    { laneId, plate, imageInUrl, metadataPatch, windowSeconds },
-    client = pool
-) => {
+exports.enrichRecentSessionByLane = async (payload, options = pool) => {
+    const laneId = payload?.laneId || payload?.entry_lane_id || null;
+    const plate = payload?.plate || payload?.license_plate || null;
+    const imageInUrl = payload?.imageInUrl ?? payload?.image_in_url;
+    const metadataPatch = payload?.metadataPatch ?? payload?.metadata_patch;
+    const windowSeconds = payload?.windowSeconds ?? payload?.window_seconds;
+    const cardUid = payload?.cardUid ?? payload?.card_uid;
+    const etagEpc = payload?.etagEpc ?? payload?.etag_epc;
+    const client =
+        options && typeof options.query === "function"
+            ? options
+            : options && options.client && typeof options.client.query === "function"
+              ? options.client
+              : pool;
+
     if (!laneId) {
         return null;
     }
@@ -591,11 +607,6 @@ exports.enrichRecentSessionByLane = async (
     params.push(laneId);
     conditions.push(`entry_lane_id = $${params.length}`);
 
-    if (plate) {
-        params.push(plate);
-        conditions.push(`license_plate = $${params.length}`);
-    }
-
     const normalizedWindowSeconds =
         Number.isInteger(windowSeconds) && windowSeconds > 0 ? windowSeconds : 120;
     params.push(normalizedWindowSeconds);
@@ -606,6 +617,21 @@ exports.enrichRecentSessionByLane = async (
     if (columns.has("image_in_url") && imageInUrl !== undefined) {
         params.push(imageInUrl || null);
         setClauses.push(`image_in_url = $${params.length}`);
+    }
+
+    if (columns.has("license_plate") && plate) {
+        params.push(plate);
+        setClauses.push(`license_plate = COALESCE(license_plate, $${params.length})`);
+    }
+
+    if (columns.has("card_uid") && cardUid) {
+        params.push(cardUid);
+        setClauses.push(`card_uid = COALESCE(card_uid, $${params.length})`);
+    }
+
+    if (columns.has("etag_epc") && etagEpc) {
+        params.push(etagEpc);
+        setClauses.push(`etag_epc = COALESCE(etag_epc, $${params.length})`);
     }
 
     if (columns.has("metadata_in") && metadataPatch !== undefined) {

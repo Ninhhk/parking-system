@@ -41,10 +41,11 @@ function EdgeMonitorContent() {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
+    const searchString = searchParams?.toString() || "";
 
     const filters = useMemo(
-        () => parseFiltersFromSearch(searchParams?.toString() || ""),
-        [searchParams]
+        () => parseFiltersFromSearch(searchString),
+        [searchString]
     );
 
     const [events, setEvents] = useState([]);
@@ -53,6 +54,11 @@ function EdgeMonitorContent() {
     const [refreshing, setRefreshing] = useState(false);
     const [retryingId, setRetryingId] = useState("");
     const pollRunnerRef = useRef(null);
+    const toastRef = useRef(toast);
+
+    useEffect(() => {
+        toastRef.current = toast;
+    }, [toast]);
 
     const setFilters = useCallback(
         (nextFilters) => {
@@ -98,13 +104,13 @@ function EdgeMonitorContent() {
                 setEvents(extractRows(eventsPayload));
                 setActiveSessions(extractRows(sessionsPayload));
             } catch (error) {
-                toast.error(error.response?.data?.message || "Failed to load edge ops data");
+                toastRef.current.error(error.response?.data?.message || "Failed to load edge ops data");
             } finally {
                 setLoading(false);
                 setRefreshing(false);
             }
         },
-        [filters, toast]
+        [filters]
     );
 
     useEffect(() => {
@@ -129,10 +135,10 @@ function EdgeMonitorContent() {
         setRetryingId(eventId);
         try {
             await retryEdgeEvent(eventId);
-            toast.success("Retry triggered");
+            toastRef.current.success("Retry triggered");
             await loadData({ silent: true });
         } catch (error) {
-            toast.error(error.response?.data?.message || "Retry failed");
+            toastRef.current.error(error.response?.data?.message || "Retry failed");
         } finally {
             setRetryingId("");
         }

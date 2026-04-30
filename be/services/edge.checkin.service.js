@@ -114,6 +114,8 @@ exports.ingestCheckinEvent = async (event) => {
             const enriched = await sessionsRepo.enrichRecentSessionByLane({
                 entry_lane_id: laneId,
                 license_plate: event.license_plate || null,
+                card_uid: event.card_uid || null,
+                etag_epc: event.etag_epc || null,
                 image_in_url: event.image_in_url || null,
                 metadata_patch: event.metadata || {},
                 window_seconds: correlationWindowSeconds,
