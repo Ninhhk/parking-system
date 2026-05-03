@@ -1,40 +1,37 @@
 # Backend (Node.js) Dockerfile - Optimized Multi-stage Build
-FROM node:18-alpine as builder
+FROM node:18-alpine AS builder
 
 WORKDIR /app/be
 
-# Copy package files
 COPY be/package*.json ./
-
-# Install all dependencies (including dev) for building
 RUN npm ci
 
-# Copy application code
 COPY be/ ./
 
 # Production stage
 FROM node:18-alpine
 
-# Install timezone data for TZ env var support
 RUN apk add --no-cache tzdata
 
 WORKDIR /app/be
 
-# Copy package files
 COPY be/package*.json ./
-
-# Install production dependencies only
 RUN npm ci --only=production
 
-# Copy application code (exclude node_modules)
-COPY be/ ./
+# Copy only runtime source — exclude tests, dev config, and env files
+COPY be/app.js ./
+COPY be/config/ ./config/
+COPY be/controllers/ ./controllers/
+COPY be/middlewares/ ./middlewares/
+COPY be/observability/ ./observability/
+COPY be/repositories/ ./repositories/
+COPY be/routes/ ./routes/
+COPY be/services/ ./services/
+COPY be/utils/ ./utils/
 
-# Expose port
 EXPOSE 5000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD node -e "require('http').get('http://localhost:5000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
-# Start application
 CMD ["node", "app.js"]

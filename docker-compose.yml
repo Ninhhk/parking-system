@@ -66,15 +66,15 @@ services:
       dockerfile: Dockerfile.lpd
     container_name: parking-lot-lpd
     environment:
-      FLASK_ENV: ${FLASK_ENV:-production}
-      PLATE_MODEL_PATH: /app/models/best.pt
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LPD_API_PORT: 8000
       LPD_API_HOST: 0.0.0.0
+      LPD_STAGE1_MODEL_PATH: /app/repo5/model/license_plate_detector.pt
+      LPD_STAGE2_MODEL_PATH: /app/repo5/model/LP_ocr_yolov8.pt
     ports:
       - "8000:8000"
     volumes:
-      - ./Licence-Plate-Detection-Recognition-Recording/models:/app/models
+      - ./Licence-Plate-Detection-Recognition-Recording/repo5/model:/app/repo5/model:ro
       - ./Licence-Plate-Detection-Recognition-Recording/outputs:/app/outputs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

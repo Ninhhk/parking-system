@@ -1,6 +1,4 @@
-# License Plate Detection (Python) Dockerfile - Optimized Build
-# Single-stage build for ML workloads (multi-stage doesn't save space with large deps)
-
+# License Plate Detection (Python) Dockerfile
 FROM python:3.10-slim
 
 WORKDIR /app
@@ -17,15 +15,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies
-COPY Licence-Plate-Detection-Recognition-Recording/requirements-prod.txt .
+COPY Licence-Plate-Detection-Recognition-Recording/requirements.txt .
 
-# Install all dependencies in one layer, leveraging pip cache
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
-    pip install torch==2.5.1 torchvision==0.20.1 && \
-    pip install -r requirements-prod.txt
+    pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu && \
+    pip install -r requirements.txt
 
-# Copy application code
+# Copy application code (see .dockerignore for exclusions)
 COPY Licence-Plate-Detection-Recognition-Recording/ ./
 
 # Expose port
@@ -43,5 +40,4 @@ ENV OMP_NUM_THREADS=2
 ENV MKL_NUM_THREADS=2
 ENV OPENBLAS_NUM_THREADS=2
 
-# Start application with gunicorn for production
 CMD ["gunicorn", "--config", "gunicorn.conf.py", "api_server:app"]
