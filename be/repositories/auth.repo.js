@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 
 exports.findUserByUsername = async (username) => {
     const query = `
-        SELECT user_id, username, full_name, password_hash, role 
+        SELECT user_id, username, full_name, password_hash, role, permissions
         FROM users 
         WHERE username = $1
     `;

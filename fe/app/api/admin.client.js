@@ -198,3 +198,22 @@ export async function fetchParkingDuration() {
     const res = await api.get("/admin/analytics/parking-duration");
     return res.data.data;
 }
+
+// ===================== FEE CONFIG V2 =====================
+// Fetch active fee configs for both vehicle types
+export async function getActiveFeeConfigs() {
+    const res = await api.get("/admin/fee-config/active");
+    return res.data.data;
+}
+
+// Fetch all versions for a vehicle type
+export async function getFeeConfigVersions(vehicleType) {
+    const res = await api.get(`/admin/fee-config/versions?vehicle_type=${vehicleType}`);
+    return res.data.data;
+}
+
+// Create a new fee config version
+export async function createFeeConfigVersion(data) {
+    const res = await api.post("/admin/fee-config/versions", data);
+    return res.data.data;
+}

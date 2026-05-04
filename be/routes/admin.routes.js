@@ -13,6 +13,8 @@ const adminNotiController = require("../controllers/admin.noti.controller");
 const adminLostTicketController = require("../controllers/admin.lostticket.controller");
 const adminAnalyticsController = require("../controllers/admin.analytics.controller");
 
+const { hasPermission } = require("../middlewares/auth.middleware");
+
 // Middleware for all admin routes
 router.use(authMiddleware.isAuthenticated, authMiddleware.hasRole(["admin"]));
 
@@ -49,9 +51,14 @@ router.delete("/monthly-subs/:id", adminMonthlySubsController.deleteMonthlySub);
 // Payments Management
 router.get("/payments", adminPaymentController.getAllPayments);
 
-// Fee Configurations
+// Fee Configurations (legacy — unchanged)
 router.get("/fee-config", adminFeeConfigController.getAllFeeConfigs);
 router.post("/fee-config", adminFeeConfigController.setServiceFee);
+
+// Fee Config v2 — versioned engine endpoints
+router.get("/fee-config/versions", adminFeeConfigController.listVersions);
+router.get("/fee-config/active", adminFeeConfigController.getActive);
+router.post("/fee-config/versions", hasPermission("can_edit_fees"), adminFeeConfigController.createVersion);
 
 // Notifications Management
 router.get("/notifications", adminNotiController.getAllNotifications);

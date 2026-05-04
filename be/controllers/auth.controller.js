@@ -35,6 +35,7 @@ exports.login = async (req, res) => {
             username: user.username,
             full_name: user.full_name,
             role: user.role,
+            permissions: user.permissions || {},
         };
 
         await new Promise((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));

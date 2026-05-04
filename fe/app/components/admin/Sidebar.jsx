@@ -38,7 +38,7 @@ const Sidebar = () => {
     // Function to check if a link is active
     const isActive = (path) => pathname === path;
 
-    // Navigation items
+    // Navigation items — computed so permission-gated items can be filtered
     const navItems = [
         {
             name: "Home",
@@ -80,7 +80,15 @@ const Sidebar = () => {
             href: "/admin/config",
             icon: <HiCog className="mr-3 h-6 w-6" />,
         },
-
+        ...(user?.permissions?.can_edit_fees === true
+            ? [
+                  {
+                      name: "Pricing Engine",
+                      href: "/admin/fee-config",
+                      icon: <HiOutlineCash className="mr-3 h-6 w-6" />,
+                  },
+              ]
+            : []),
         {
             name: "Notifications",
             href: "/admin/notifications",
