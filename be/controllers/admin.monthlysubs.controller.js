@@ -115,3 +115,34 @@ exports.deleteMonthlySub = async (req, res) => {
         });
     }
 }
+
+exports.updateMonthlySub = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { end_date, owner_name, owner_phone, vehicle_type } = req.body;
+
+        if (!end_date && !owner_name && !owner_phone && !vehicle_type) {
+            return res.status(422).json({ success: false, message: "No updatable fields provided" });
+        }
+
+        const existing = await subsRepo.getMonthlySubById(id);
+        if (!existing) {
+            return res.status(404).json({ success: false, message: "Subscription not found" });
+        }
+
+        if (end_date) {
+            const overlap = await subsRepo.checkExistingSubExcluding(
+                existing.license_plate, existing.start_date, end_date, id
+            );
+            if (overlap > 0) {
+                return res.status(409).json({ success: false, message: "Date range overlaps with another active subscription" });
+            }
+        }
+
+        const updated = await subsRepo.updateMonthlySub(id, { end_date, owner_name, owner_phone, vehicle_type });
+        res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+        console.error("Update monthly sub error:", error);
+        res.status(500).json({ success: false, message: "Internal server error" });
+    }
+};

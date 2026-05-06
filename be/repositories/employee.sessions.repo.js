@@ -191,15 +191,29 @@ exports.getSession = async (sessionId) => {
     return result.rows[0];
 };
 
-exports.checkMonthlySub = async (license_plate, current_date) => {
+exports.checkMonthlySub = async (license_plate, vehicle_type, current_date) => {
     const query = `
         SELECT * FROM MonthlySubs
         WHERE license_plate = $1
-        AND start_date <= $2
-        AND end_date >= $2
+          AND vehicle_type  = $2
+          AND start_date   <= $3
+          AND end_date     >= $3
     `;
 
-    const result = await pool.query(query, [license_plate, current_date]);
+    const result = await pool.query(query, [license_plate, vehicle_type, current_date]);
+    return result.rows[0];
+};
+
+// card_uid column was added to MonthlySubs via db/init/010_add_card_uid_to_monthly_subs.sql
+exports.checkMonthlySubByCard = async (card_uid, vehicle_type, current_date) => {
+    const query = `
+        SELECT * FROM MonthlySubs
+        WHERE card_uid    = $1
+          AND vehicle_type = $2
+          AND start_date  <= $3
+          AND end_date    >= $3
+    `;
+    const result = await pool.query(query, [card_uid, vehicle_type, current_date]);
     return result.rows[0];
 };
 

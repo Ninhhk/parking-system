@@ -82,7 +82,7 @@ exports.checkInVehicle = async (req, res) => {
         let is_monthly = false;
         if (license_plate) {
             const today = getToday();
-            const monthlyPass = await sessionsRepo.checkMonthlySub(license_plate, today);
+            const monthlyPass = await sessionsRepo.checkMonthlySub(license_plate, vehicle_type, today);
             is_monthly = !!monthlyPass;
         }
 
@@ -226,13 +226,15 @@ exports.checkInByRfid = async (req, res) => {
 
         let newSession;
         try {
+            const today = getToday();
+            const monthlyPass = await sessionsRepo.checkMonthlySubByCard(card_uid, vehicle_type, today);
             const optionalFields = { etag_epc, entry_lane_id, image_in_url, metadata_in };
             const startSessionPayload = {
                 lot_id: parkingLot.lot_id,
                 license_plate: null,
                 card_uid,
                 vehicle_type,
-                is_monthly: false,
+                is_monthly: !!monthlyPass,
                 ...Object.fromEntries(
                     Object.entries(optionalFields).filter(([, v]) => v !== undefined)
                 ),

@@ -46,6 +46,7 @@ router.delete("/lost-tickets/:id", adminLostTicketController.deleteLostTicketRep
 // Monthly Subs Management
 router.get("/monthly-subs", adminMonthlySubsController.getAllMonthlySubs);
 router.post("/monthly-subs", adminMonthlySubsController.createMonthlySub);
+router.put("/monthly-subs/:id", adminMonthlySubsController.updateMonthlySub);
 router.delete("/monthly-subs/:id", adminMonthlySubsController.deleteMonthlySub);
 
 // Payments Management

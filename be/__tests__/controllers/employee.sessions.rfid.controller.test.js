@@ -14,6 +14,7 @@ const loadControllerWithFlag = (rfidEnabled) => {
 
     const sessionsRepo = {
         startSession: jest.fn(),
+        checkMonthlySubByCard: jest.fn().mockResolvedValue(undefined),
     };
 
     const lotsRepo = {
