@@ -2,15 +2,7 @@ const { pool } = require("../config/db");
 
 exports.getSessionForCheckout = async (sessionId, client = pool) => {
     const result = await client.query(
-        `SELECT
-            ps.*,
-            fc.service_fee,
-            fc.penalty_fee
-         FROM parkingsessions ps
-         LEFT JOIN feeconfigs fc
-            ON fc.vehicle_type = ps.vehicle_type
-           AND fc.ticket_type = CASE WHEN ps.is_monthly THEN 'monthly' ELSE 'daily' END
-         WHERE ps.session_id = $1`,
+        `SELECT ps.* FROM parkingsessions ps WHERE ps.session_id = $1`,
         [sessionId]
     );
     return result.rows[0] || null;
@@ -18,25 +10,7 @@ exports.getSessionForCheckout = async (sessionId, client = pool) => {
 
 exports.getSessionForCheckoutForUpdate = async (sessionId, client = pool) => {
     const result = await client.query(
-        `SELECT
-            ps.*,
-            (
-                SELECT fc.service_fee
-                FROM feeconfigs fc
-                WHERE fc.vehicle_type = ps.vehicle_type
-                  AND fc.ticket_type = CASE WHEN ps.is_monthly THEN 'monthly' ELSE 'daily' END
-                LIMIT 1
-            ) AS service_fee,
-            (
-                SELECT fc.penalty_fee
-                FROM feeconfigs fc
-                WHERE fc.vehicle_type = ps.vehicle_type
-                  AND fc.ticket_type = CASE WHEN ps.is_monthly THEN 'monthly' ELSE 'daily' END
-                LIMIT 1
-            ) AS penalty_fee
-         FROM parkingsessions ps
-         WHERE ps.session_id = $1
-         FOR UPDATE`,
+        `SELECT ps.* FROM parkingsessions ps WHERE ps.session_id = $1 FOR UPDATE`,
         [sessionId]
     );
     return result.rows[0] || null;

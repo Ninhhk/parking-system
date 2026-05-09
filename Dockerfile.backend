@@ -26,6 +26,7 @@ COPY be/middlewares/ ./middlewares/
 COPY be/observability/ ./observability/
 COPY be/repositories/ ./repositories/
 COPY be/routes/ ./routes/
+COPY be/rules/ ./rules/
 COPY be/services/ ./services/
 COPY be/utils/ ./utils/
 

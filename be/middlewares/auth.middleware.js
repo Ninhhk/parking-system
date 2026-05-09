@@ -33,4 +33,13 @@ function isNotAuthenticated(req, res, next) {
   next();
 }
 
-module.exports = { isAuthenticated, hasRole, hasAnyRole, isNotAuthenticated };
+// Middleware factory to check a specific permission claim on the user
+function hasPermission(claim) {
+    return (req, res, next) => {
+        const perms = req.session.user?.permissions || {};
+        if (perms[claim] === true) return next();
+        return res.status(403).json({ message: "Forbidden. You do not have the required permissions." });
+    };
+}
+
+module.exports = { isAuthenticated, hasRole, hasAnyRole, isNotAuthenticated, hasPermission };
