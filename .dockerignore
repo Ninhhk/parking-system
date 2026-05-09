@@ -55,8 +55,6 @@ docs
 Licence-Plate-Detection-Recognition-Recording/venv/
 Licence-Plate-Detection-Recognition-Recording/env/
 Licence-Plate-Detection-Recognition-Recording/outputs/
-Licence-Plate-Detection-Recognition-Recording/detections/*.png
-Licence-Plate-Detection-Recognition-Recording/detections/*.jpg
 Licence-Plate-Detection-Recognition-Recording/samples/
 Licence-Plate-Detection-Recognition-Recording/input_videos/
 Licence-Plate-Detection-Recognition-Recording/output_videos/
@@ -64,13 +62,26 @@ Licence-Plate-Detection-Recognition-Recording/.paddlex/
 Licence-Plate-Detection-Recognition-Recording/.idea/
 Licence-Plate-Detection-Recognition-Recording/.vscode/
 Licence-Plate-Detection-Recognition-Recording/.pytest_cache/
+Licence-Plate-Detection-Recognition-Recording/.hypothesis/
 Licence-Plate-Detection-Recognition-Recording/docs/
 Licence-Plate-Detection-Recognition-Recording/*.md
-Licence-Plate-Detection-Recognition-Recording/models/*.pt
-Licence-Plate-Detection-Recognition-Recording/models/*.pth
-Licence-Plate-Detection-Recognition-Recording/models/*.onnx
 Licence-Plate-Detection-Recognition-Recording/__pycache__/
 Licence-Plate-Detection-Recognition-Recording/**/__pycache__/
 Licence-Plate-Detection-Recognition-Recording/tests/
 Licence-Plate-Detection-Recognition-Recording/requirements-dev.txt
 Licence-Plate-Detection-Recognition-Recording/pytest.ini
+# Models are mounted as a volume at runtime — not baked into the image
+Licence-Plate-Detection-Recognition-Recording/models/
+Licence-Plate-Detection-Recognition-Recording/repo5/model/
+# repo5 non-runtime directories
+Licence-Plate-Detection-Recognition-Recording/repo5/yolov5/
+Licence-Plate-Detection-Recognition-Recording/repo5/training/
+Licence-Plate-Detection-Recognition-Recording/repo5/test_image/
+Licence-Plate-Detection-Recognition-Recording/repo5/.hypothesis/
+Licence-Plate-Detection-Recognition-Recording/repo5/.pytest_cache/
+Licence-Plate-Detection-Recognition-Recording/repo5/*.md
+Licence-Plate-Detection-Recognition-Recording/repo5/*.pt
+Licence-Plate-Detection-Recognition-Recording/repo5/benchmark.py
+Licence-Plate-Detection-Recognition-Recording/repo5/lp_image.py
+Licence-Plate-Detection-Recognition-Recording/repo5/webcam.py
+Licence-Plate-Detection-Recognition-Recording/repo5/tests/
