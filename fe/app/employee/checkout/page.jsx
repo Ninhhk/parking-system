@@ -54,7 +54,7 @@ export default function CheckOutPage() {
 
     const formatSessions = (sessions) =>
         sessions
-            .filter((session) => session.license_plate.toLowerCase().includes(searchTerm.toLowerCase()))
+            .filter((session) => (session.license_plate ?? "").toLowerCase().includes(searchTerm.toLowerCase()))
             .map((s) => ({
                 ...s,
                 vehicle_type: s.vehicle_type.charAt(0).toUpperCase() + s.vehicle_type.slice(1),

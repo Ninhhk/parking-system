@@ -324,7 +324,7 @@ exports.initiateCheckout = async (req, res) => {
         }
 
         // Use centralized fee calculation service
-        const feeResult = calculateAndValidateFee(session);
+        const feeResult = await calculateAndValidateFee(session);
 
         if (!feeResult.success) {
             return res.status(400).json({
@@ -406,7 +406,7 @@ exports.confirmCheckout = async (req, res) => {
         }
 
         // Use centralized fee calculation service (same as initiateCheckout)
-        const feeResult = calculateAndValidateFee(session);
+        const feeResult = await calculateAndValidateFee(session);
 
         if (!feeResult.success) {
             return res.status(400).json({

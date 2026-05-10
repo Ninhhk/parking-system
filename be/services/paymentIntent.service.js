@@ -91,7 +91,7 @@ exports.createOrReuseIntent = async ({
             throw new Error("Session already checked out");
         }
 
-        const feeResult = calculateAndValidateFee(session);
+        const feeResult = await calculateAndValidateFee(session);
         if (!feeResult.success) {
             throw new Error(feeResult.error || "Unable to calculate payment amount");
         }
