@@ -100,11 +100,15 @@ const lookupLanePolicy = (laneId) => {
 };
 
 const resolveLaneDirection = (payload) => {
-    if (payload.lane_direction) {
-        return String(payload.lane_direction).toUpperCase();
-    }
+    // Gateway config is authoritative; payload.lane_direction is only a fallback
+    // for lanes not present in config (e.g. dynamically provisioned lanes).
     const lanePolicy = lookupLanePolicy(payload.lane_id);
-    return (lanePolicy?.lane_direction ?? "ENTRY").toUpperCase();
+    if (lanePolicy) {
+        return String(lanePolicy.lane_direction).toUpperCase();
+    }
+    return payload.lane_direction
+        ? String(payload.lane_direction).toUpperCase()
+        : "ENTRY";
 };
 
 const resolveExitByIdentity = async (payload, triggerType, triggerValue, client) => {

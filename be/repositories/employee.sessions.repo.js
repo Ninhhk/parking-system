@@ -1,5 +1,4 @@
 const { pool } = require("../config/db");
-const { getToday } = require("../utils/date");
 const feeConfigRepo = require("./admin.feeConfig.repo");
 const { DEFAULT_PENALTY_FEE, UNKNOWN_GUEST_IDENTIFIER } = require("../config/constants");
 
@@ -650,7 +649,7 @@ exports.closeSession = async (sessionId, client = pool) => {
     const session = result.rows[0] || null;
     if (!session) return null;
 
-    const column = session.vehicle_type.toLowerCase() === "car" ? "current_car" : "current_bike";
+    const column = (session.vehicle_type || "car").toLowerCase() === "car" ? "current_car" : "current_bike";
     await client.query(
         `UPDATE ParkingLots
          SET ${column} = GREATEST(${column} - 1, 0)
