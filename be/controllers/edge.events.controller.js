@@ -114,6 +114,13 @@ exports.retryEvent = async (req, res) => {
             });
         }
 
+        if (existing.retry_count >= existing.max_retries) {
+            return res.status(409).json({
+                success: false,
+                message: "Retry limit reached",
+            });
+        }
+
         await edgeEventsRepo.markForRetry({ eventId });
 
         const payload = {

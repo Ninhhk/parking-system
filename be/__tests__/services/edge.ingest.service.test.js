@@ -19,6 +19,7 @@ jest.mock("../../repositories/employee.sessions.repo", () => ({
     findActiveByEtagEpc: jest.fn(),
     findActiveByPlate: jest.fn(),
     startSession: jest.fn(),
+    closeSession: jest.fn(),
 }));
 
 const edgeEventsRepo = require("../../repositories/edge.events.repo");
@@ -351,6 +352,186 @@ describe("edge.ingest service", () => {
         );
         expect(edgeEventsRepo.createProcessing).not.toHaveBeenCalled();
         expect(dbClient.query).toHaveBeenCalledWith("COMMIT");
+    });
+
+    // -----------------------------------------------------------------------
+    // Bug 2 exploration — exit events not routed (EXPECTED TO FAIL on unfixed code)
+    // Property 1: for EXIT lane payloads, ingestEvent MUST route to exit processing:
+    //   - active session exists → action = SESSION_CLOSED, startSession NOT called
+    //   - no active session     → action = EXIT_NO_ACTIVE_SESSION, startSession NOT called
+    // Validates: Requirements 1.3, 1.4
+    // -----------------------------------------------------------------------
+    describe("Bug 2 exploration — exit events not routed", () => {
+        const basePayload = (overrides = {}) => ({
+            event_id: "evt_exit_001",
+            gateway_id: "gw-exit",
+            lane_id: "lane-exit",
+            occurred_at: "2026-01-01T00:00:00.000Z",
+            lot_id: 1,
+            vehicle_type: "car",
+            lane_direction: "EXIT",
+            ...overrides,
+        });
+
+        it("EXIT + IC_CARD with active session: action is SESSION_CLOSED and startSession is NOT called", async () => {
+            edgeEventsRepo.getByEventIdForUpdate.mockResolvedValue(null);
+            edgeEventsRepo.createProcessing.mockResolvedValue({});
+            sessionsRepo.findActiveByCardUid.mockResolvedValue({
+                session_id: 2001,
+                card_uid: "CARD-EXIT-001",
+            });
+            sessionsRepo.closeSession.mockResolvedValue({
+                session_id: 2001,
+                card_uid: "CARD-EXIT-001",
+            });
+            sessionsRepo.startSession.mockResolvedValue({ session_id: 9999 });
+
+            const result = await edgeIngestService.ingestEvent(
+                basePayload({
+                    trigger: { type: "IC_CARD", value: "CARD-EXIT-001" },
+                })
+            );
+
+            expect(result.action).toBe("SESSION_CLOSED");
+            expect(sessionsRepo.startSession).not.toHaveBeenCalled();
+        });
+
+        it("EXIT + MANUAL with no active session: action is EXIT_NO_ACTIVE_SESSION and startSession is NOT called", async () => {
+            edgeEventsRepo.getByEventIdForUpdate.mockResolvedValue(null);
+            edgeEventsRepo.createProcessing.mockResolvedValue({});
+            sessionsRepo.findActiveByPlate.mockResolvedValue(null);
+            sessionsRepo.startSession.mockResolvedValue({ session_id: 9999 });
+
+            const result = await edgeIngestService.ingestEvent(
+                basePayload({
+                    trigger: { type: "MANUAL", value: "51A-99999" },
+                })
+            );
+
+            expect(result.action).toBe("EXIT_NO_ACTIVE_SESSION");
+            expect(sessionsRepo.startSession).not.toHaveBeenCalled();
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // Bug 2 preservation — ENTRY path unchanged (MUST PASS on unfixed code)
+    // Property 5: for all ENTRY payloads (including no lane_direction field),
+    //   ingestEvent MUST NOT return action SESSION_CLOSED or EXIT_NO_ACTIVE_SESSION.
+    // Validates: Requirements 2.9, 3.4, 3.5, 3.6, 3.7
+    // -----------------------------------------------------------------------
+    describe("Bug 2 preservation — ENTRY path unchanged", () => {
+        const entryPayload = (overrides = {}) => ({
+            event_id: "evt_entry_pres_001",
+            gateway_id: "gw-a",
+            lane_id: "lane-a",
+            occurred_at: "2026-01-01T00:00:00.000Z",
+            lot_id: 1,
+            vehicle_type: "car",
+            // No lane_direction field — defaults to ENTRY behavior
+            ...overrides,
+        });
+
+        // Baseline: IC_CARD on ENTRY (no lane_direction) → SESSION_RESOLVED, not SESSION_CLOSED
+        it("IC_CARD on ENTRY (no lane_direction) resolves session and action is never SESSION_CLOSED or EXIT_NO_ACTIVE_SESSION", async () => {
+            edgeEventsRepo.getByEventIdForUpdate.mockResolvedValue(null);
+            edgeEventsRepo.createProcessing.mockResolvedValue({});
+            sessionsRepo.findActiveByCardUid.mockResolvedValue(null);
+            sessionsRepo.startSession.mockResolvedValue({ session_id: 3001, card_uid: "CARD-ENTRY-001" });
+            edgeEventsRepo.markSuccess.mockResolvedValue({});
+
+            const result = await edgeIngestService.ingestEvent(
+                entryPayload({ trigger: { type: "IC_CARD", value: "CARD-ENTRY-001" } })
+            );
+
+            expect(result.action).not.toBe("SESSION_CLOSED");
+            expect(result.action).not.toBe("EXIT_NO_ACTIVE_SESSION");
+            expect(result.status).toBe("SUCCESS");
+            expect(sessionsRepo.startSession).toHaveBeenCalled();
+        });
+
+        // LPD on ENTRY → enrichRecentSessionByLane path, action is SESSION_RESOLVED (not SESSION_CLOSED)
+        it("LPD on ENTRY (no lane_direction) uses enrichRecentSessionByLane and action is never SESSION_CLOSED", async () => {
+            edgeEventsRepo.getByEventIdForUpdate.mockResolvedValue(null);
+            edgeEventsRepo.createProcessing.mockResolvedValue({});
+            sessionsRepo.enrichRecentSessionByLane.mockResolvedValue({ session_id: 3002 });
+            edgeEventsRepo.markSuccess.mockResolvedValue({});
+
+            const result = await edgeIngestService.ingestEvent(
+                entryPayload({ trigger: { type: "LPD", plate: "51A12345" } })
+            );
+
+            expect(sessionsRepo.enrichRecentSessionByLane).toHaveBeenCalled();
+            expect(result.action).not.toBe("SESSION_CLOSED");
+            expect(result.action).not.toBe("EXIT_NO_ACTIVE_SESSION");
+        });
+
+        // Duplicate event_id on ENTRY → DUPLICATE regardless of direction
+        it("duplicate event_id on ENTRY returns DUPLICATE action (unchanged)", async () => {
+            edgeEventsRepo.getByEventIdForUpdate.mockResolvedValue({
+                event_id: "evt_entry_pres_001",
+                status: "SUCCESS",
+                session_id: 3003,
+            });
+
+            const result = await edgeIngestService.ingestEvent(
+                entryPayload({ trigger: { type: "MANUAL", value: "51A12345" } })
+            );
+
+            expect(result.duplicate).toBe(true);
+            expect(result.action).toBe("DUPLICATE");
+            expect(result.action).not.toBe("SESSION_CLOSED");
+            expect(result.action).not.toBe("EXIT_NO_ACTIVE_SESSION");
+        });
+
+        // Property: for all ENTRY trigger types (IC_CARD, UHF_TAG, MANUAL) with no lane_direction,
+        // action is never SESSION_CLOSED or EXIT_NO_ACTIVE_SESSION
+        const entryTriggerCases = [
+            { type: "IC_CARD", value: "CARD-001", findMock: "findActiveByCardUid" },
+            { type: "UHF_TAG", value: "TAG-001", findMock: "findActiveByEtagEpc" },
+            { type: "MANUAL", value: "51A-00001", findMock: "findActiveByPlate" },
+        ];
+
+        it.each(entryTriggerCases)(
+            "$type on ENTRY (no lane_direction) never produces SESSION_CLOSED or EXIT_NO_ACTIVE_SESSION",
+            async ({ type, value, findMock }) => {
+                edgeEventsRepo.getByEventIdForUpdate.mockResolvedValue(null);
+                edgeEventsRepo.createProcessing.mockResolvedValue({});
+                sessionsRepo[findMock].mockResolvedValue(null);
+                sessionsRepo.startSession.mockResolvedValue({ session_id: 4000 });
+                edgeEventsRepo.markSuccess.mockResolvedValue({});
+
+                const result = await edgeIngestService.ingestEvent(
+                    entryPayload({
+                        event_id: `evt_entry_pres_${type}`,
+                        trigger: { type, value },
+                    })
+                );
+
+                expect(result.action).not.toBe("SESSION_CLOSED");
+                expect(result.action).not.toBe("EXIT_NO_ACTIVE_SESSION");
+            }
+        );
+
+        // Explicit lane_direction: "ENTRY" also preserves entry behavior
+        it("explicit lane_direction ENTRY still routes through entry path (SESSION_RESOLVED)", async () => {
+            edgeEventsRepo.getByEventIdForUpdate.mockResolvedValue(null);
+            edgeEventsRepo.createProcessing.mockResolvedValue({});
+            sessionsRepo.findActiveByPlate.mockResolvedValue(null);
+            sessionsRepo.startSession.mockResolvedValue({ session_id: 5001 });
+            edgeEventsRepo.markSuccess.mockResolvedValue({});
+
+            const result = await edgeIngestService.ingestEvent(
+                entryPayload({
+                    event_id: "evt_entry_explicit_001",
+                    lane_direction: "ENTRY",
+                    trigger: { type: "MANUAL", value: "51A-55555" },
+                })
+            );
+
+            expect(result.action).not.toBe("SESSION_CLOSED");
+            expect(result.action).not.toBe("EXIT_NO_ACTIVE_SESSION");
+            expect(result.status).toBe("SUCCESS");
+        });
     });
 
     it("trims IC_CARD trigger.value before processing lookup and session creation", async () => {

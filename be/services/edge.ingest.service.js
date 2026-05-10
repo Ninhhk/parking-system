@@ -3,6 +3,7 @@ const { EDGE_LPD_CORRELATION_WINDOW_SECONDS } = require("../config/constants");
 const edgeEventsRepo = require("../repositories/edge.events.repo");
 const sessionsRepo = require("../repositories/employee.sessions.repo");
 const { sanitizePlate } = require("../utils/licensePlate");
+const gatewayConfig = require("../config/edge_gateways.json");
 
 const LPD_TRIGGER = "LPD";
 const CAPACITY_FULL = "CAPACITY_FULL";
@@ -90,6 +91,39 @@ const resolveOrCreateByIdentity = async (payload, triggerType, triggerValue, cli
     );
 };
 
+const lookupLanePolicy = (laneId) => {
+    for (const gw of gatewayConfig.gateways) {
+        const lane = gw.lanes.find((l) => l.lane_id === laneId);
+        if (lane) return lane;
+    }
+    return null;
+};
+
+const resolveLaneDirection = (payload) => {
+    if (payload.lane_direction) {
+        return String(payload.lane_direction).toUpperCase();
+    }
+    const lanePolicy = lookupLanePolicy(payload.lane_id);
+    return (lanePolicy?.lane_direction ?? "ENTRY").toUpperCase();
+};
+
+const resolveExitByIdentity = async (payload, triggerType, triggerValue, client) => {
+    let session;
+
+    if (triggerType === "IC_CARD") {
+        session = await sessionsRepo.findActiveByCardUid(triggerValue, client);
+    } else if (triggerType === "UHF_TAG") {
+        session = await sessionsRepo.findActiveByEtagEpc(triggerValue, client);
+    } else {
+        const rawPlate = payload.trigger && payload.trigger.plate ? payload.trigger.plate : triggerValue;
+        const plate = sanitizePlate(rawPlate);
+        session = await sessionsRepo.findActiveByPlate(plate, client);
+    }
+
+    if (!session) return null;
+    return sessionsRepo.closeSession(session.session_id, client);
+};
+
 exports.ingestEvent = async (payload, options = {}) => {
     const client = await pool.connect();
     const allowReplay = Boolean(options && options.allowReplay);
@@ -150,6 +184,65 @@ exports.ingestEvent = async (payload, options = {}) => {
                 }
                 throw error;
             }
+        }
+
+        const direction = resolveLaneDirection(normalizedPayload);
+        const resolvedTriggerValue = normalizedPayload.trigger.value || null;
+
+        if (direction === "EXIT") {
+            const closedSession = await resolveExitByIdentity(
+                normalizedPayload,
+                triggerType,
+                resolvedTriggerValue,
+                client
+            );
+
+            if (!closedSession) {
+                if (allowReplay) {
+                    await edgeEventsRepo.markFailed(
+                        {
+                            eventId: normalizedPayload.event_id,
+                            errorCode: "EXIT_NO_ACTIVE_SESSION",
+                            errorMessage: "No active session found to close for exit event",
+                        },
+                        client,
+                        { incrementRetry: false }
+                    );
+                } else {
+                    await edgeEventsRepo.markFailed(
+                        {
+                            eventId: normalizedPayload.event_id,
+                            errorCode: "EXIT_NO_ACTIVE_SESSION",
+                            errorMessage: "No active session found to close for exit event",
+                        },
+                        client
+                    );
+                }
+                await client.query("COMMIT");
+                return {
+                    duplicate: false,
+                    status: "FAILED",
+                    action: "EXIT_NO_ACTIVE_SESSION",
+                    event_id: normalizedPayload.event_id,
+                    session_id: null,
+                };
+            }
+
+            await edgeEventsRepo.markSuccess(
+                {
+                    eventId: normalizedPayload.event_id,
+                    sessionId: closedSession.session_id,
+                },
+                client
+            );
+            await client.query("COMMIT");
+            return {
+                duplicate: false,
+                status: "SUCCESS",
+                action: "SESSION_CLOSED",
+                event_id: normalizedPayload.event_id,
+                session_id: closedSession.session_id,
+            };
         }
 
         if (triggerType === LPD_TRIGGER) {
@@ -218,7 +311,6 @@ exports.ingestEvent = async (payload, options = {}) => {
             };
         }
 
-        const resolvedTriggerValue = normalizedPayload.trigger.value || null;
         const session = await resolveOrCreateByIdentity(
             normalizedPayload,
             triggerType,
