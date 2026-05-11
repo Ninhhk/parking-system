@@ -58,6 +58,8 @@ describe("edge.events.controller", () => {
             edgeEventsRepo.getByEventId.mockResolvedValue({
                 event_id: "evt_failed_001",
                 status: "FAILED",
+                retry_count: 0,
+                max_retries: 3,
                 payload_json: payloadJson,
             });
             edgeEventsRepo.markForRetry.mockResolvedValue({});

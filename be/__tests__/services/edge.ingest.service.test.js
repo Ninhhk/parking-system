@@ -411,6 +411,38 @@ describe("edge.ingest service", () => {
             expect(result.action).toBe("EXIT_NO_ACTIVE_SESSION");
             expect(sessionsRepo.startSession).not.toHaveBeenCalled();
         });
+
+        // Config-authoritative test: lane_id exists in edge_gateways.json as EXIT,
+        // so even without payload.lane_direction the config drives exit routing.
+        it("EXIT via config lookup (lane-exit-1 in edge_gateways.json): action is SESSION_CLOSED", async () => {
+            edgeEventsRepo.getByEventIdForUpdate.mockResolvedValue(null);
+            edgeEventsRepo.createProcessing.mockResolvedValue({});
+            sessionsRepo.findActiveByCardUid.mockResolvedValue({
+                session_id: 2050,
+                card_uid: "CARD-CFG-EXIT",
+            });
+            sessionsRepo.closeSession.mockResolvedValue({
+                session_id: 2050,
+                card_uid: "CARD-CFG-EXIT",
+            });
+            sessionsRepo.startSession.mockResolvedValue({ session_id: 9999 });
+            edgeEventsRepo.markSuccess.mockResolvedValue({});
+
+            const result = await edgeIngestService.ingestEvent({
+                event_id: "evt_cfg_exit_001",
+                gateway_id: "gw-edge-1",
+                lane_id: "lane-exit-1", // exists in edge_gateways.json with lane_direction: EXIT
+                occurred_at: "2026-01-01T00:00:00.000Z",
+                lot_id: 1,
+                vehicle_type: "car",
+                // No lane_direction in payload — config is authoritative
+                trigger: { type: "IC_CARD", value: "CARD-CFG-EXIT" },
+            });
+
+            expect(result.action).toBe("SESSION_CLOSED");
+            expect(sessionsRepo.startSession).not.toHaveBeenCalled();
+            expect(sessionsRepo.closeSession).toHaveBeenCalled();
+        });
     });
 
     // -----------------------------------------------------------------------
