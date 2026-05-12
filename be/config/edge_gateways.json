@@ -6,17 +6,25 @@
             "lanes": [
                 {
                     "lane_id": "lane-concurrent-1",
+                    "lane_direction": "ENTRY",
                     "allowed_trigger_modules": ["CARD", "LPD"],
                     "correlation_window_seconds": 7
                 },
                 {
                     "lane_id": "lane-card-lpd-1",
+                    "lane_direction": "ENTRY",
                     "allowed_trigger_modules": ["CARD", "LPD"],
                     "correlation_window_seconds": 5
                 },
                 {
                     "lane_id": "lane-uhf-only-1",
+                    "lane_direction": "ENTRY",
                     "allowed_trigger_modules": ["UHF"]
+                },
+                {
+                    "lane_id": "lane-exit-1",
+                    "lane_direction": "EXIT",
+                    "allowed_trigger_modules": ["CARD", "UHF", "LPD"]
                 }
             ]
         },
@@ -26,6 +34,7 @@
             "lanes": [
                 {
                     "lane_id": "lane-mixed-1",
+                    "lane_direction": "ENTRY",
                     "allowed_trigger_modules": ["CARD", "UHF", "LPD"],
                     "correlation_window_seconds": 10
                 }

@@ -1,5 +1,4 @@
 const { pool } = require("../config/db");
-const { getToday } = require("../utils/date");
 const feeConfigRepo = require("./admin.feeConfig.repo");
 const { DEFAULT_PENALTY_FEE, UNKNOWN_GUEST_IDENTIFIER } = require("../config/constants");
 
@@ -129,50 +128,6 @@ exports.startSession = async (sessionData, options = {}) => {
     }
 };
 
-exports.enrichRecentSessionByLane = async ({
-    entry_lane_id,
-    license_plate = null,
-    image_in_url = null,
-    metadata_patch = {},
-    window_seconds = 5,
-}, options = {}) => {
-    // Caller should serialize by lane (e.g. advisory lock) to avoid race updates.
-    if (!entry_lane_id) {
-        return null;
-    }
-
-    const queryClient = options.client || pool;
-
-    const query = `
-        WITH candidate AS (
-            SELECT session_id
-            FROM ParkingSessions
-            WHERE entry_lane_id = $1
-              AND time_out IS NULL
-              AND time_in >= NOW() - ($5::text || ' seconds')::interval
-            ORDER BY time_in DESC
-            LIMIT 1
-        )
-        UPDATE ParkingSessions ps
-        SET
-            license_plate = COALESCE(ps.license_plate, $2),
-            image_in_url = COALESCE(ps.image_in_url, $3),
-            metadata_in = COALESCE(ps.metadata_in, '{}'::jsonb) || COALESCE($4::jsonb, '{}'::jsonb)
-        FROM candidate
-        WHERE ps.session_id = candidate.session_id
-        RETURNING ps.*
-    `;
-
-    const result = await queryClient.query(query, [
-        entry_lane_id,
-        license_plate,
-        image_in_url,
-        JSON.stringify(metadata_patch),
-        window_seconds,
-    ]);
-
-    return result.rows[0] || null;
-};
 
 exports.getSession = async (sessionId) => {
     const query = `
@@ -681,4 +636,26 @@ exports.enrichRecentSessionByLane = async (payload, options = pool) => {
         }
         throw error;
     }
+};
+
+exports.closeSession = async (sessionId, client = pool) => {
+    const result = await client.query(
+        `UPDATE ParkingSessions
+         SET time_out = NOW()
+         WHERE session_id = $1 AND time_out IS NULL
+         RETURNING *`,
+        [sessionId]
+    );
+    const session = result.rows[0] || null;
+    if (!session) return null;
+
+    const column = (session.vehicle_type || "car").toLowerCase() === "car" ? "current_car" : "current_bike";
+    await client.query(
+        `UPDATE ParkingLots
+         SET ${column} = GREATEST(${column} - 1, 0)
+         WHERE lot_id = $1`,
+        [session.lot_id]
+    );
+
+    return session;
 };
