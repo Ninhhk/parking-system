@@ -21,6 +21,7 @@ exports.createIntent = async (
         status,
         amount,
         metadata,
+        idempotencyKey,
     },
     client = pool
 ) => {
@@ -30,9 +31,10 @@ exports.createIntent = async (
             provider,
             status,
             amount,
-            metadata
+            metadata,
+            idempotency_key
         )
-         VALUES ($1, $2, $3, $4, $5::jsonb)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6)
          RETURNING *`,
         [
             sessionId,
@@ -40,6 +42,7 @@ exports.createIntent = async (
             status,
             amount,
             metadata ? JSON.stringify(metadata) : JSON.stringify({}),
+            idempotencyKey || null,
         ]
     );
     return result.rows[0] || null;

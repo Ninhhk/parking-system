@@ -314,6 +314,8 @@ export default function PaymentDetailsPage() {
                         payment_method: "CARD",
                     });
                     router.replace(`/employee/checkout/success?${params.toString()}`);
+                } else if (nextStatus === "FAILED" || nextStatus === "EXPIRED") {
+                    clearInterval(timer);
                 }
             } catch (err) {
                 // keep polling silently

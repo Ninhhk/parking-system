@@ -1,7 +1,9 @@
 const checkoutService = require("../../services/checkout.service");
+const paymentIntentService = require("../../services/paymentIntent.service");
 const controller = require("../../controllers/employee.payment.controller");
 
 jest.mock("../../services/checkout.service");
+jest.mock("../../services/paymentIntent.service");
 
 describe("employee.payment.controller", () => {
     beforeEach(() => {
@@ -127,7 +129,7 @@ describe("employee.payment.controller", () => {
         });
 
         it("forces a new attempt when idempotency_key is provided", async () => {
-            checkoutService.createIntent.mockResolvedValue({
+            paymentIntentService.regenerateAttempt.mockResolvedValue({
                 status: "PENDING",
                 intent_status: "PENDING",
                 intent: { intent_id: 12, status: "PENDING" },
@@ -145,14 +147,10 @@ describe("employee.payment.controller", () => {
 
             await controller.regenerateIntent(req, res);
 
-            expect(checkoutService.createIntent).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    sessionId: 1,
-                    paymentMethod: "CARD",
-                    idempotencyKey: "idem-regenerate-1",
-                    forceNew: true,
-                })
-            );
+            expect(paymentIntentService.regenerateAttempt).toHaveBeenCalledWith({
+                sessionId: 1,
+                idempotencyKey: "idem-regenerate-1",
+            });
             expect(res.status).toHaveBeenCalledWith(201);
             expect(res.json).toHaveBeenCalledWith({
                 success: true,

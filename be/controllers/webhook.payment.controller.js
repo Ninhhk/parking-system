@@ -15,12 +15,12 @@ exports.payosWebhook = async (req, res) => {
     } catch (error) {
         console.log(
             JSON.stringify({
-                event: "payos_webhook_invalid",
+                event: "payos_webhook_error",
                 order_code: req.body?.data?.orderCode || null,
                 webhook_event_id: req.body?.data?.reference || req.body?.signature || null,
                 error: error.message,
             })
         );
-        return res.status(200).json({ success: true, data: { ok: true, replay: true, reason: "INVALID_WEBHOOK" } });
+        return res.status(200).json({ success: true, data: { ok: true, replay: true, reason: "INTERNAL_ERROR" } });
     }
 };

@@ -45,6 +45,7 @@ describe("paymentIntent repo query contracts", () => {
                 "PENDING",
                 20000,
                 JSON.stringify({ hello: "world" }),
+                null,
             ]
         );
     });

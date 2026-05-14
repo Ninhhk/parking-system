@@ -50,6 +50,19 @@ const computeExpiry = (fromDate = new Date()) => {
     };
 };
 
+const parseProviderExpiry = (expiredAt) => {
+    if (!expiredAt) return null;
+    // PayOS returns expiredAt as Unix seconds; new Date() expects ms
+    const num = Number(expiredAt);
+    if (Number.isFinite(num) && num > 0 && num < 4102444800) {
+        // Looks like Unix seconds (before year 2100) — convert to ms
+        return new Date(num * 1000);
+    }
+    // Already ms or ISO string
+    const d = new Date(expiredAt);
+    return Number.isNaN(d.getTime()) ? null : d;
+};
+
 const buildPayOSPayload = ({ sessionId, amount, orderCode, expiredAt }) => ({
     orderCode,
     amount: Math.round(Number(amount)),
@@ -103,12 +116,39 @@ exports.createOrReuseIntent = async ({
 
         let intent = await paymentIntentRepo.getActiveBySessionForUpdate(sessionId, client);
 
+        // Lazy expiration: if active intent's attempt has expires_at < NOW(), mark both EXPIRED
+        if (intent && intent.status === "PENDING") {
+            const activeAttempt = await resolveActiveAttempt({ intent, client });
+            if (
+                activeAttempt &&
+                activeAttempt.expires_at &&
+                new Date(activeAttempt.expires_at) < new Date()
+            ) {
+                await paymentAttemptRepo.markFailedOrExpired(
+                    { attemptId: activeAttempt.attempt_id, status: "EXPIRED", failureReason: "Lazy expiration" },
+                    client
+                );
+                await paymentIntentRepo.updateIntentStatus(
+                    { intentId: intent.intent_id, status: "EXPIRED" },
+                    client
+                );
+                console.log(
+                    JSON.stringify({
+                        event: "lazy_expire",
+                        intent_id: intent.intent_id,
+                        session_id: sessionId,
+                        attempt_id: activeAttempt.attempt_id,
+                    })
+                );
+                intent = null; // No longer active — proceed to create new
+            }
+        }
+
         if (intent && !forceNew) {
             const activeAttempt = await resolveActiveAttempt({ intent, client });
             if (
                 activeAttempt &&
                 activeAttempt.status === "PENDING" &&
-                activeAttempt.provider_order_code &&
                 activeAttempt.checkout_url &&
                 activeAttempt.expires_at &&
                 new Date(activeAttempt.expires_at) > new Date() &&
@@ -142,9 +182,10 @@ exports.createOrReuseIntent = async ({
                 {
                     sessionId,
                     provider: "PAYOS",
-                    status: "PENDING",
+                    status: "REQUIRES_PAYMENT_METHOD",
                     amount,
                     metadata: { paymentMethod },
+                    idempotencyKey: idempotencyKey || null,
                 },
                 client
             );
@@ -158,17 +199,6 @@ exports.createOrReuseIntent = async ({
                 provider: intent.provider || "PAYOS",
                 paymentMethod,
                 amount,
-            },
-            client
-        );
-
-        await paymentAttemptRepo.attachProviderIntent(
-            {
-                attemptId: attempt.attempt_id,
-                providerOrderCode: String(attempt.attempt_id),
-                qrCodeUrl: null,
-                checkoutUrl: null,
-                expiresAt: null,
             },
             client
         );
@@ -245,9 +275,7 @@ exports.createOrReuseIntent = async ({
                 providerOrderCode: String(link.orderCode || pending.providerOrderCode || pending.attemptId),
                 qrCodeUrl: link.qrCode || null,
                 checkoutUrl: link.checkoutUrl || null,
-                expiresAt: link.expiredAt
-                    ? new Date(link.expiredAt)
-                    : pending.expiresAtDate,
+                expiresAt: parseProviderExpiry(link.expiredAt) || pending.expiresAtDate,
             },
             writeClient
         );
@@ -327,27 +355,319 @@ exports.createOrReuseIntent = async ({
     }
 };
 
-exports.getPaymentStatus = async ({ intentId, sessionId }) => {
-    let intent = null;
-    if (intentId) {
-        intent = await paymentIntentRepo.getById(intentId);
-    } else if (sessionId) {
-        const intents = await paymentIntentRepo.getBySession(sessionId);
-        intent = intents[0] || null;
+exports.regenerateAttempt = async ({ sessionId, idempotencyKey }) => {
+    let pending = null;
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        const session = await sessionRepo.getSessionForCheckoutForUpdate(sessionId, client);
+        if (!session) {
+            throw new Error("Session not found");
+        }
+        if (session.time_out) {
+            throw new Error("Session already checked out");
+        }
+
+        const feeResult = await calculateAndValidateFee(session);
+        if (!feeResult.success) {
+            throw new Error(feeResult.error || "Unable to calculate payment amount");
+        }
+
+        const amount = feeResult.totalAmount;
+
+        const intent = await paymentIntentRepo.getActiveBySessionForUpdate(sessionId, client);
+        if (!intent) {
+            throw new Error("No active payment intent found for session");
+        }
+
+        // Idempotency check: if idempotency_key matches existing PENDING intent
+        // with non-expired active attempt and matching amount, return existing
+        if (idempotencyKey && intent.status === "PENDING" && intent.idempotency_key === idempotencyKey) {
+            const activeAttempt = await resolveActiveAttempt({ intent, client });
+            if (
+                activeAttempt &&
+                activeAttempt.status === "PENDING" &&
+                activeAttempt.expires_at &&
+                new Date(activeAttempt.expires_at) > new Date() &&
+                Math.round(Number(activeAttempt.amount || intent.amount || 0)) === Math.round(Number(amount || 0))
+            ) {
+                await client.query("COMMIT");
+                paymentMetrics.increment("reuse_intent");
+                console.log(
+                    JSON.stringify({
+                        event: "reuse_intent",
+                        session_id: sessionId,
+                        intent_id: intent.intent_id,
+                        attempt_id: activeAttempt.attempt_id,
+                        order_code: activeAttempt.provider_order_code || null,
+                        idempotency_key: idempotencyKey,
+                    })
+                );
+                return {
+                    reused: true,
+                    intent: toIntentProjection(intent),
+                    active_attempt: toAttemptProjection(activeAttempt),
+                    amount,
+                    service_fee: feeResult.serviceFee,
+                    penalty_fee: feeResult.penaltyFee,
+                    hours: feeResult.hours,
+                };
+            }
+        }
+
+        // Create new attempt
+        const attempt = await paymentAttemptRepo.createAttempt(
+            {
+                sessionId,
+                subId: null,
+                intentId: intent.intent_id,
+                provider: intent.provider || "PAYOS",
+                paymentMethod: (intent.metadata && intent.metadata.paymentMethod) || "CARD",
+                amount,
+            },
+            client
+        );
+
+        // Supersede all PENDING/CREATED attempts except the new one
+        await paymentAttemptRepo.markSupersededByIntent(intent.intent_id, attempt.attempt_id, client);
+
+        await paymentAttemptRepo.attachProviderIntent(
+            {
+                attemptId: attempt.attempt_id,
+                providerOrderCode: String(attempt.attempt_id),
+                qrCodeUrl: null,
+                checkoutUrl: null,
+                expiresAt: null,
+            },
+            client
+        );
+
+        const normalizedKey = typeof idempotencyKey === "string" && idempotencyKey.trim()
+            ? idempotencyKey.trim()
+            : `pi-${intent.intent_id}-attempt-${attempt.attempt_id}`;
+
+        pending = {
+            amount,
+            feeResult,
+            intentId: intent.intent_id,
+            attemptId: attempt.attempt_id,
+            providerOrderCode: String(attempt.attempt_id),
+            sessionId,
+            paymentMethod: (intent.metadata && intent.metadata.paymentMethod) || "CARD",
+            idempotencyKey: normalizedKey,
+            reused: false,
+            ...computeExpiry(),
+        };
+        await client.query("COMMIT");
+    } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+    } finally {
+        client.release();
     }
+
+    // Call PayOS outside transaction
+    let link;
+    try {
+        link = await payosProvider.createPaymentLink(
+            buildPayOSPayload({
+                sessionId: pending.sessionId,
+                amount: pending.amount,
+                orderCode: Number(pending.providerOrderCode),
+                expiredAt: pending.expiresAtUnix,
+            }),
+            { idempotencyKey: pending.idempotencyKey }
+        );
+    } catch (error) {
+        const failClient = await pool.connect();
+        try {
+            await failClient.query("BEGIN");
+            await paymentAttemptRepo.markFailedOrExpired(
+                {
+                    attemptId: pending.attemptId,
+                    status: "FAILED",
+                    failureReason: `Provider link creation failed: ${error.message}`,
+                },
+                failClient
+            );
+            await paymentIntentRepo.updateIntentStatus(
+                {
+                    intentId: pending.intentId,
+                    status: "REQUIRES_PAYMENT_METHOD",
+                },
+                failClient
+            );
+            await failClient.query("COMMIT");
+        } catch (innerError) {
+            await failClient.query("ROLLBACK");
+        } finally {
+            failClient.release();
+        }
+        throw error;
+    }
+
+    // Tx2: persist provider response
+    const writeClient = await pool.connect();
+    try {
+        await writeClient.query("BEGIN");
+
+        const attached = await paymentAttemptRepo.attachProviderIntent(
+            {
+                attemptId: pending.attemptId,
+                providerOrderCode: String(link.orderCode || pending.providerOrderCode || pending.attemptId),
+                qrCodeUrl: link.qrCode || null,
+                checkoutUrl: link.checkoutUrl || null,
+                expiresAt: parseProviderExpiry(link.expiredAt) || pending.expiresAtDate,
+            },
+            writeClient
+        );
+
+        let updatedIntent = await paymentIntentRepo.setActiveAttempt(pending.intentId, attached.attempt_id, writeClient);
+        updatedIntent = await paymentIntentRepo.updateIntentStatus(
+            {
+                intentId: pending.intentId,
+                status: "PENDING",
+                amount: pending.amount,
+                metadata: {
+                    paymentMethod: pending.paymentMethod,
+                    idempotencyKey: pending.idempotencyKey,
+                },
+            },
+            writeClient
+        );
+
+        await writeClient.query("COMMIT");
+
+        paymentMetrics.increment("regenerate");
+        console.log(
+            JSON.stringify({
+                event: "regenerate",
+                session_id: pending.sessionId,
+                intent_id: pending.intentId,
+                attempt_id: attached.attempt_id,
+                order_code: attached.provider_order_code || null,
+            })
+        );
+
+        return {
+            reused: pending.reused,
+            intent: toIntentProjection(updatedIntent),
+            active_attempt: toAttemptProjection(attached),
+            amount: pending.amount,
+            service_fee: pending.feeResult.serviceFee,
+            penalty_fee: pending.feeResult.penaltyFee,
+            hours: pending.feeResult.hours,
+        };
+    } catch (error) {
+        await writeClient.query("ROLLBACK");
+
+        const failClient = await pool.connect();
+        try {
+            await failClient.query("BEGIN");
+            await paymentAttemptRepo.markFailedOrExpired(
+                {
+                    attemptId: pending.attemptId,
+                    status: "FAILED",
+                    failureReason: `Persisting provider checkout state failed: ${error.message}`,
+                },
+                failClient
+            );
+            await paymentIntentRepo.updateIntentStatus(
+                {
+                    intentId: pending.intentId,
+                    status: "REQUIRES_PAYMENT_METHOD",
+                },
+                failClient
+            );
+            await failClient.query("COMMIT");
+        } catch (innerError) {
+            await failClient.query("ROLLBACK");
+        } finally {
+            failClient.release();
+        }
+
+        throw error;
+    } finally {
+        writeClient.release();
+    }
+};
+
+exports.getPaymentStatus = async ({ sessionId }) => {
+    const intents = await paymentIntentRepo.getBySession(sessionId);
+    const intent = intents.find(
+        (i) => ["REQUIRES_PAYMENT_METHOD", "PENDING", "PAID"].includes(i.status)
+    ) || null;
 
     if (!intent) {
         return {
+            intent_status: "NOT_FOUND",
             intent: null,
             active_attempt: null,
         };
     }
 
-    const activeAttempt = intent.active_attempt_id
+    let activeAttempt = intent.active_attempt_id
         ? await paymentAttemptRepo.getById(intent.active_attempt_id)
         : await paymentAttemptRepo.getActiveAttemptByIntentId(intent.intent_id);
 
+    // Lazy expiration: if intent is PENDING and active attempt has expired
+    if (
+        intent.status === "PENDING" &&
+        activeAttempt &&
+        activeAttempt.expires_at &&
+        new Date(activeAttempt.expires_at) < new Date()
+    ) {
+        const client = await pool.connect();
+        try {
+            await client.query("BEGIN");
+
+            await paymentAttemptRepo.markFailedOrExpired(
+                {
+                    attemptId: activeAttempt.attempt_id,
+                    status: "EXPIRED",
+                    failureReason: "Lazy expiration: attempt expired at read-time",
+                },
+                client
+            );
+
+            const updatedIntent = await paymentIntentRepo.updateIntentStatus(
+                {
+                    intentId: intent.intent_id,
+                    status: "EXPIRED",
+                },
+                client
+            );
+
+            await client.query("COMMIT");
+
+            console.log(
+                JSON.stringify({
+                    event: "lazy_expire",
+                    intent_id: intent.intent_id,
+                    session_id: sessionId,
+                    attempt_id: activeAttempt.attempt_id,
+                })
+            );
+
+            return {
+                intent_status: "EXPIRED",
+                intent: toIntentProjection(updatedIntent),
+                active_attempt: toAttemptProjection({
+                    ...activeAttempt,
+                    status: "EXPIRED",
+                }),
+            };
+        } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
     return {
+        intent_status: intent.status,
         intent: toIntentProjection(intent),
         active_attempt: toAttemptProjection(activeAttempt),
     };
@@ -356,7 +676,22 @@ exports.getPaymentStatus = async ({ intentId, sessionId }) => {
 exports.processWebhook = async (payload) => {
     const startedAt = Date.now();
     const webhookEventId = payload?.data?.reference || payload?.signature || null;
-    const verified = await payosProvider.verifyWebhook(payload);
+
+    let verified;
+    try {
+        verified = await payosProvider.verifyWebhook(payload);
+    } catch (err) {
+        console.log(
+            JSON.stringify({
+                event: "webhook_replay",
+                reason: "INVALID_WEBHOOK",
+                error: err.message,
+                webhook_event_id: webhookEventId,
+            })
+        );
+        return { ok: true, replay: true, reason: "INVALID_WEBHOOK" };
+    }
+
     const data = verified && verified.data ? verified.data : verified || {};
 
     const topLevelCode = String(payload?.code || "");
@@ -366,7 +701,15 @@ exports.processWebhook = async (payload) => {
     const orderCode = String(data.orderCode || "");
 
     if (!orderCode) {
-        throw new Error("Missing order code");
+        console.log(
+            JSON.stringify({
+                event: "webhook_replay",
+                reason: "INVALID_WEBHOOK",
+                error: "Missing order code",
+                webhook_event_id: webhookEventId,
+            })
+        );
+        return { ok: true, replay: true, reason: "INVALID_WEBHOOK" };
     }
 
     const client = await pool.connect();
@@ -486,7 +829,7 @@ exports.processWebhook = async (payload) => {
             console.log(
                 JSON.stringify({
                     event: "webhook_replay",
-                    reason: "PAID_BY_OTHER_PROCESS",
+                    reason: "ALREADY_PAID",
                     session_id: intent.session_id,
                     intent_id: intent.intent_id,
                     attempt_id: attempt.attempt_id,
@@ -494,7 +837,7 @@ exports.processWebhook = async (payload) => {
                     webhook_event_id: webhookEventId,
                 })
             );
-            return { ok: true, replay: true, reason: "PAID_BY_OTHER_PROCESS" };
+            return { ok: true, replay: true, reason: "ALREADY_PAID" };
         }
 
         const session = await sessionRepo.getSessionForCheckout(markedPaid.session_id, client);
@@ -568,8 +911,16 @@ exports.processWebhook = async (payload) => {
         );
         return { ok: true, replay: !finalized };
     } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
+        try { await client.query("ROLLBACK"); } catch (_) { /* ignore */ }
+        console.error(
+            JSON.stringify({
+                event: "webhook_error",
+                order_code: orderCode,
+                error: error.message,
+                webhook_event_id: webhookEventId,
+            })
+        );
+        return { ok: true, replay: true, reason: "INTERNAL_ERROR" };
     } finally {
         client.release();
     }

@@ -51,7 +51,7 @@ describe("paymentIntent service webhook processing", () => {
     });
 
     it("returns replay-safe for unknown order code", async () => {
-        payosProvider.verifyWebhook.mockResolvedValue({
+        payosProvider.verifyWebhook.mockReturnValue({
             success: true,
             code: "00",
             data: { code: "00", orderCode: 999 },
@@ -68,7 +68,7 @@ describe("paymentIntent service webhook processing", () => {
     });
 
     it("returns replay-safe for duplicate webhook", async () => {
-        payosProvider.verifyWebhook.mockResolvedValue({
+        payosProvider.verifyWebhook.mockReturnValue({
             success: true,
             code: "00",
             data: { code: "00", orderCode: 123, reference: "REF" },
@@ -94,7 +94,7 @@ describe("paymentIntent service webhook processing", () => {
     });
 
     it("returns replay-safe when intent has no active attempt mapping", async () => {
-        payosProvider.verifyWebhook.mockResolvedValue({
+        payosProvider.verifyWebhook.mockReturnValue({
             success: true,
             code: "00",
             data: { code: "00", orderCode: 123, reference: "REF" },
@@ -120,7 +120,7 @@ describe("paymentIntent service webhook processing", () => {
     });
 
     it("finalizes successful active attempt exactly once", async () => {
-        payosProvider.verifyWebhook.mockResolvedValue({
+        payosProvider.verifyWebhook.mockReturnValue({
             success: true,
             code: "00",
             data: { code: "00", orderCode: 123, reference: "REF" },
