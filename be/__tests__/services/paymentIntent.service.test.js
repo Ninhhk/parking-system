@@ -17,6 +17,7 @@ jest.mock("../../repositories/paymentIntent.repo", () => ({
     setActiveAttempt: jest.fn(),
     updateIntentStatus: jest.fn(),
     getById: jest.fn(),
+    getBySession: jest.fn(),
 }));
 
 jest.mock("../../repositories/paymentAttempt.repo", () => ({
@@ -205,14 +206,14 @@ describe("paymentIntent service", () => {
     });
 
     it("getPaymentStatus returns intent and active attempt projection", async () => {
-        intentRepo.getById.mockResolvedValue({
+        intentRepo.getBySession.mockResolvedValue([{
             intent_id: 10,
             session_id: 1,
             status: "PENDING",
             amount: 20000,
             active_attempt_id: 22,
             provider: "PAYOS",
-        });
+        }]);
 
         attemptRepo.getById.mockResolvedValue({
             attempt_id: 22,
@@ -224,9 +225,10 @@ describe("paymentIntent service", () => {
             expires_at: "2099-03-29T13:00:00.000Z",
         });
 
-        const result = await paymentIntentService.getPaymentStatus({ intentId: 10 });
+        const result = await paymentIntentService.getPaymentStatus({ sessionId: 1 });
 
         expect(result).toEqual({
+            intent_status: "PENDING",
             intent: {
                 intent_id: 10,
                 session_id: 1,
@@ -349,10 +351,19 @@ describe("paymentIntent service", () => {
             expires_at: "2000-01-01T00:00:00.000Z",
         });
 
+        // Lazy expiration marks the intent EXPIRED, so a new intent is created
+        intentRepo.createIntent.mockResolvedValue({
+            intent_id: 11,
+            session_id: 1,
+            status: "REQUIRES_PAYMENT_METHOD",
+            amount: 20000,
+            provider: "PAYOS",
+        });
+
         attemptRepo.createAttempt.mockResolvedValue({
             attempt_id: 24,
-            intent_id: 10,
-            status: "PENDING",
+            intent_id: 11,
+            status: "CREATED",
         });
 
         payosProvider.createPaymentLink.mockResolvedValue({
@@ -364,7 +375,7 @@ describe("paymentIntent service", () => {
 
         attemptRepo.attachProviderIntent.mockResolvedValue({
             attempt_id: 24,
-            intent_id: 10,
+            intent_id: 11,
             status: "PENDING",
             provider_order_code: "24",
             checkout_url: "https://payos/checkout/24",
@@ -373,7 +384,7 @@ describe("paymentIntent service", () => {
         });
 
         intentRepo.setActiveAttempt.mockResolvedValue({
-            intent_id: 10,
+            intent_id: 11,
             active_attempt_id: 24,
             status: "PENDING",
             amount: 20000,
@@ -381,12 +392,17 @@ describe("paymentIntent service", () => {
         });
 
         intentRepo.updateIntentStatus.mockResolvedValue({
-            intent_id: 10,
+            intent_id: 11,
             session_id: 1,
             status: "PENDING",
             amount: 20000,
             active_attempt_id: 24,
             provider: "PAYOS",
+        });
+
+        attemptRepo.markFailedOrExpired.mockResolvedValue({
+            attempt_id: 21,
+            status: "EXPIRED",
         });
 
         const result = await paymentIntentService.createOrReuseIntent({
@@ -397,6 +413,11 @@ describe("paymentIntent service", () => {
 
         expect(result.reused).toBe(false);
         expect(attemptRepo.createAttempt).toHaveBeenCalled();
+        // Verify lazy expiration was applied
+        expect(attemptRepo.markFailedOrExpired).toHaveBeenCalledWith(
+            expect.objectContaining({ attemptId: 21, status: "EXPIRED" }),
+            dbClient
+        );
     });
 
     it("does not reuse pending attempt when expires_at is null", async () => {

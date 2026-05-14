@@ -28,8 +28,8 @@ describe("webhook.payment.controller", () => {
         });
     });
 
-    it("returns 200 replay-safe payload when webhook verification fails", async () => {
-        checkoutService.finalizeFromWebhook.mockRejectedValue(new Error("signature invalid"));
+    it("returns 200 with INTERNAL_ERROR when service throws unexpected error", async () => {
+        checkoutService.finalizeFromWebhook.mockRejectedValue(new Error("unexpected failure"));
 
         const req = {
             body: { code: "00", success: true, data: { orderCode: 123 }, signature: "sig" },
@@ -44,7 +44,7 @@ describe("webhook.payment.controller", () => {
         expect(res.status).toHaveBeenCalledWith(200);
         expect(res.json).toHaveBeenCalledWith({
             success: true,
-            data: { ok: true, replay: true, reason: "INVALID_WEBHOOK" },
+            data: { ok: true, replay: true, reason: "INTERNAL_ERROR" },
         });
     });
 });

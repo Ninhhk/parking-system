@@ -1,4 +1,5 @@
 const checkoutService = require("../services/checkout.service");
+const paymentIntentService = require("../services/paymentIntent.service");
 
 const toIntentResponse = (result = {}) => ({
     ...result,
@@ -43,7 +44,6 @@ exports.createIntent = async (req, res) => {
 exports.regenerateIntent = async (req, res) => {
     try {
         const sessionId = Number(req.params.session_id);
-        const requestedAmount = Number(req.body.amount);
         const idempotencyKey = req.body.idempotency_key;
 
         if (!Number.isInteger(sessionId) || sessionId <= 0) {
@@ -60,12 +60,9 @@ exports.regenerateIntent = async (req, res) => {
             });
         }
 
-        const result = await checkoutService.createIntent({
+        const result = await paymentIntentService.regenerateAttempt({
             sessionId,
-            paymentMethod: "CARD",
-            requestedAmount: Number.isFinite(requestedAmount) ? requestedAmount : undefined,
             idempotencyKey,
-            forceNew: true,
         });
 
         return res.status(201).json({
@@ -96,9 +93,9 @@ exports.getPaymentStatus = async (req, res) => {
             data: toIntentResponse(result),
         });
     } catch (error) {
-        return res.status(500).json({
+        return res.status(400).json({
             success: false,
-            message: "Failed to fetch payment status",
+            message: error.message,
         });
     }
 };
