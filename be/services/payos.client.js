@@ -14,4 +14,4 @@ const getPayOS = () => {
 };
 
 exports.createPaymentLink = async (payload) => getPayOS().paymentRequests.create(payload);
-exports.verifyWebhook = (payload) => getPayOS().webhooks.verify(payload);
+exports.verifyWebhook = async (payload) => getPayOS().webhooks.verify(payload);

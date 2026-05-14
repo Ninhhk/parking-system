@@ -50,6 +50,19 @@ const computeExpiry = (fromDate = new Date()) => {
     };
 };
 
+const parseProviderExpiry = (expiredAt) => {
+    if (!expiredAt) return null;
+    // PayOS returns expiredAt as Unix seconds; new Date() expects ms
+    const num = Number(expiredAt);
+    if (Number.isFinite(num) && num > 0 && num < 4102444800) {
+        // Looks like Unix seconds (before year 2100) — convert to ms
+        return new Date(num * 1000);
+    }
+    // Already ms or ISO string
+    const d = new Date(expiredAt);
+    return Number.isNaN(d.getTime()) ? null : d;
+};
+
 const buildPayOSPayload = ({ sessionId, amount, orderCode, expiredAt }) => ({
     orderCode,
     amount: Math.round(Number(amount)),
@@ -262,9 +275,7 @@ exports.createOrReuseIntent = async ({
                 providerOrderCode: String(link.orderCode || pending.providerOrderCode || pending.attemptId),
                 qrCodeUrl: link.qrCode || null,
                 checkoutUrl: link.checkoutUrl || null,
-                expiresAt: link.expiredAt
-                    ? new Date(link.expiredAt)
-                    : pending.expiresAtDate,
+                expiresAt: parseProviderExpiry(link.expiredAt) || pending.expiresAtDate,
             },
             writeClient
         );
@@ -507,9 +518,7 @@ exports.regenerateAttempt = async ({ sessionId, idempotencyKey }) => {
                 providerOrderCode: String(link.orderCode || pending.providerOrderCode || pending.attemptId),
                 qrCodeUrl: link.qrCode || null,
                 checkoutUrl: link.checkoutUrl || null,
-                expiresAt: link.expiredAt
-                    ? new Date(link.expiredAt)
-                    : pending.expiresAtDate,
+                expiresAt: parseProviderExpiry(link.expiredAt) || pending.expiresAtDate,
             },
             writeClient
         );
@@ -670,7 +679,7 @@ exports.processWebhook = async (payload) => {
 
     let verified;
     try {
-        verified = payosProvider.verifyWebhook(payload);
+        verified = await payosProvider.verifyWebhook(payload);
     } catch (err) {
         console.log(
             JSON.stringify({

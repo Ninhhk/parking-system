@@ -51,7 +51,7 @@ exports.markPaidByOrderCode = async ({ providerOrderCode, providerTransactionId,
              webhook_payload = $2::jsonb,
              updated_at = NOW()
          WHERE provider_order_code = $3
-           AND status = 'PENDING'
+           AND status IN ('PENDING', 'EXPIRED')
          RETURNING *`,
         [providerTransactionId || null, JSON.stringify(webhookPayload), providerOrderCode]
     );
