@@ -3,10 +3,16 @@ const dotenv = require("dotenv");
 // Load environment variables before importing modules that read process.env at require-time
 dotenv.config();
 
+// Fail fast if critical secrets are missing
+if (!process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET env var is required");
+}
+
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const session = require("express-session");
+const morgan = require("morgan");
 const { connectDB } = require("./config/db");
 const { SESSION_MAX_AGE_MS } = require("./config/constants");
 
@@ -45,6 +51,7 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 app.use(cookieParser());
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 // Session configuration
 app.use(
@@ -53,8 +60,9 @@ app.use(
         resave: false,
         saveUninitialized: false,
         cookie: {
-            //secure: process.env.NODE_ENV === 'production',
+            secure: process.env.NODE_ENV === "production",
             httpOnly: true,
+            sameSite: "lax",
             maxAge: SESSION_MAX_AGE_MS,
         },
     })
@@ -74,11 +82,16 @@ app.use("/api/edge", edgeRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error(err.stack);
+    console.error(JSON.stringify({
+        error: err.message,
+        stack: err.stack,
+        method: req.method,
+        path: req.originalUrl,
+        userId: req.session?.user?.id || null,
+    }));
     res.status(500).json({
         success: false,
         message: "Internal Server Error",
-        //error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
 });
 
