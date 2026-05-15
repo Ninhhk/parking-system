@@ -13,7 +13,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const session = require("express-session");
 const morgan = require("morgan");
-const { connectDB } = require("./config/db");
+const { pool, connectDB } = require("./config/db");
 const { SESSION_MAX_AGE_MS } = require("./config/constants");
 
 // Import routes
@@ -69,8 +69,13 @@ app.use(
 );
 
 // Health check endpoint
-app.get("/health", (req, res) => {
-    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+app.get("/health", async (req, res) => {
+    try {
+        await pool.query("SELECT 1");
+        res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+    } catch (err) {
+        res.status(503).json({ status: "degraded", db: "unreachable", timestamp: new Date().toISOString() });
+    }
 });
 
 // Routes
