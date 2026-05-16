@@ -83,12 +83,19 @@ async function uploadCheckinImage(base64Image, { lotId, sessionId, direction, ex
             ext: finalExt,
         });
 
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Upload timeout")), UPLOAD_TIMEOUT_MS)
-        );
+        let timer;
+        const timeoutPromise = new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error("Upload timeout")), UPLOAD_TIMEOUT_MS);
+        });
 
-        const objectKey = await Promise.race([uploadPromise, timeoutPromise]);
-        return objectKey;
+        try {
+            const objectKey = await Promise.race([uploadPromise, timeoutPromise]);
+            clearTimeout(timer);
+            return objectKey;
+        } catch (err) {
+            clearTimeout(timer);
+            throw err;
+        }
     } catch (err) {
         console.error(`[ImageUpload] Failed for session ${sessionId}: ${err.message}`);
         return null;
@@ -144,12 +151,19 @@ async function uploadCheckoutImage(base64Image, { lotId, sessionId }) {
             ext: parsed.ext,
         });
 
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Upload timeout (30s)")), CHECKOUT_UPLOAD_TIMEOUT_MS)
-        );
+        let timer;
+        const timeoutPromise = new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error("Upload timeout (30s)")), CHECKOUT_UPLOAD_TIMEOUT_MS);
+        });
 
-        const objectKey = await Promise.race([uploadPromise, timeoutPromise]);
-        return objectKey;
+        try {
+            const objectKey = await Promise.race([uploadPromise, timeoutPromise]);
+            clearTimeout(timer);
+            return objectKey;
+        } catch (err) {
+            clearTimeout(timer);
+            throw err;
+        }
     } catch (err) {
         console.error(JSON.stringify({
             event: "checkout_image_upload_failed",

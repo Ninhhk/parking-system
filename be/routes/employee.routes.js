@@ -43,6 +43,7 @@ router.post(
 );
 router.get("/parking/exit/:session_id/payment-status", employeePaymentController.getPaymentStatus);
 router.post("/parking/edge/checkin-event", edgeController.ingestCheckinEvent);
+router.get("/sessions/:session_id/image-presigned", sessionsController.getImagePresignedUrl);
 
 // Profile routes
 router.get("/profile", profileController.getMyProfile);

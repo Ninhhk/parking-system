@@ -597,3 +597,28 @@ exports.deleteLostTicket = async (req, res) => {
         res.status(500).json({ success: false, message: "Internal server error" });
     }
 };
+
+// Get a fresh presigned URL for a session image
+exports.getImagePresignedUrl = async (req, res) => {
+    try {
+        const { session_id } = req.params;
+        const { direction } = req.query;
+
+        if (!session_id) {
+            return res.status(422).json({ success: false, message: "Session ID is required" });
+        }
+
+        const session = await sessionsRepo.getSession(session_id);
+        if (!session) {
+            return res.status(404).json({ success: false, message: "Session not found" });
+        }
+
+        const key = direction === "out" ? session.image_out_url : session.image_in_url;
+        const url = key ? await getPresignedUrl(key) : null;
+
+        res.json({ success: true, data: { url } });
+    } catch (error) {
+        console.error("Get image presigned URL error:", error);
+        res.status(500).json({ success: false, message: "Internal server error" });
+    }
+};

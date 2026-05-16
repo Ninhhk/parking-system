@@ -24,7 +24,7 @@ export default function SessionImage({ objectKey, type, sessionId }) {
 
     const fetchPresignedUrl = useCallback(async () => {
         try {
-            const res = await api.get(`/sessions/${sessionId}/image-presigned`, {
+            const res = await api.get(`/employee/sessions/${sessionId}/image-presigned`, {
                 params: { direction: type },
             });
             const url = res.data?.data?.url;
