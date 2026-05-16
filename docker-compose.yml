@@ -92,6 +92,69 @@ services:
       - parking-lot-network
     restart: unless-stopped
 
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: parking-lot-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - parking-lot-network
+    restart: unless-stopped
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:latest
+    container_name: parking-lot-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: /bin/sh -c
+    command:
+      - |
+        set -e
+        ATTEMPTS=0
+        MAX_ATTEMPTS=3
+        until mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; do
+          ATTEMPTS=$$((ATTEMPTS + 1))
+          if [ $$ATTEMPTS -ge $$MAX_ATTEMPTS ]; then
+            echo "ERROR: Failed to configure MinIO client after $$MAX_ATTEMPTS attempts"
+            exit 1
+          fi
+          echo "Retrying MinIO alias setup ($$ATTEMPTS/$$MAX_ATTEMPTS)..."
+          sleep 5
+        done
+        ATTEMPTS=0
+        until mc mb --ignore-existing myminio/parking-images; do
+          ATTEMPTS=$$((ATTEMPTS + 1))
+          if [ $$ATTEMPTS -ge $$MAX_ATTEMPTS ]; then
+            echo "ERROR: Failed to create parking-images bucket after $$MAX_ATTEMPTS attempts"
+            exit 1
+          fi
+          echo "Retrying bucket creation ($$ATTEMPTS/$$MAX_ATTEMPTS)..."
+          sleep 5
+        done
+        echo "Bucket parking-images is ready."
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    networks:
+      - parking-lot-network
+    restart: "no"
+
   # Backend API (Node.js)
   backend:
     build:
@@ -144,3 +207,4 @@ networks:
 
 volumes:
   postgres_data:
+  minio_data:

@@ -4,7 +4,24 @@ const controller = require("../../controllers/employee.sessions.controller");
 
 jest.mock("../../repositories/employee.sessions.repo");
 jest.mock("../../repositories/admin.lots.repo");
-
+jest.mock("../../config/minio", () => ({
+    minioClient: null,
+    MINIO_BUCKET: "parking-images",
+    isMinioConfigured: false,
+    MINIO_EXTERNAL_ENDPOINT: "localhost",
+    MINIO_EXTERNAL_PORT: 9000,
+}));
+jest.mock("../../services/minio.service", () => ({
+    getPresignedUrl: jest.fn().mockResolvedValue(null),
+    uploadImage: jest.fn().mockResolvedValue(null),
+    deriveObjectKey: jest.fn().mockReturnValue("test-key"),
+}));
+jest.mock("../../services/image.upload.helper", () => ({
+    uploadCheckinImage: jest.fn().mockResolvedValue(null),
+    uploadCheckoutImage: jest.fn().mockResolvedValue(null),
+    isBase64Image: jest.fn().mockReturnValue(false),
+    parseBase64Image: jest.fn().mockReturnValue({ raw: "", ext: "jpg" }),
+}));
 describe("employee.sessions.controller checkInVehicle", () => {
     beforeEach(() => {
         jest.clearAllMocks();

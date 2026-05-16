@@ -1,6 +1,7 @@
 const { pool } = require("../config/db");
 const sessionsRepo = require("../repositories/employee.sessions.repo");
 const edgeGatewaysConfig = require("../config/edge_gateways.json");
+const { uploadCheckinImage, isBase64Image } = require("./image.upload.helper");
 
 const DEFAULT_CORRELATION_WINDOW_SECONDS = 5;
 
@@ -76,6 +77,10 @@ exports.ingestCheckinEvent = async (event) => {
     const lotId = event?.lot_id;
     const vehicleType = event?.vehicle_type;
     const triggerType = normalizeTriggerType(event?.trigger_type);
+    const rawImageInUrl = event?.image_in_url || null;
+    const hasBase64 = isBase64Image(rawImageInUrl);
+    // If base64, don't store raw string in DB; upload after commit
+    const imageInUrlForDb = hasBase64 ? null : rawImageInUrl;
 
     if (!gatewayId) {
         throw toValidationError("gateway_id is required for edge check-in event");
@@ -116,13 +121,25 @@ exports.ingestCheckinEvent = async (event) => {
                 license_plate: event.license_plate || null,
                 card_uid: event.card_uid || null,
                 etag_epc: event.etag_epc || null,
-                image_in_url: event.image_in_url || null,
+                image_in_url: imageInUrlForDb,
                 metadata_patch: event.metadata || {},
                 window_seconds: correlationWindowSeconds,
             }, { client });
 
             if (enriched) {
                 await client.query("COMMIT");
+                // Upload base64 image after commit
+                if (hasBase64) {
+                    const objectKey = await uploadCheckinImage(rawImageInUrl, {
+                        lotId: String(enriched.lot_id),
+                        sessionId: String(enriched.session_id),
+                        direction: "in",
+                    });
+                    if (objectKey) {
+                        await sessionsRepo.updateSessionImageUrl(enriched.session_id, "image_in_url", objectKey);
+                        enriched.image_in_url = objectKey;
+                    }
+                }
                 return enriched;
             }
 
@@ -139,7 +156,7 @@ exports.ingestCheckinEvent = async (event) => {
             card_uid: event.card_uid || null,
             etag_epc: event.etag_epc || null,
             entry_lane_id: laneId,
-            image_in_url: event.image_in_url || null,
+            image_in_url: imageInUrlForDb,
             metadata_in: event.metadata || {},
             vehicle_type: vehicleType,
             is_monthly: !!event.is_monthly,
@@ -154,6 +171,20 @@ exports.ingestCheckinEvent = async (event) => {
         }
 
         await client.query("COMMIT");
+
+        // Upload base64 image after commit
+        if (hasBase64) {
+            const objectKey = await uploadCheckinImage(rawImageInUrl, {
+                lotId: String(created.lot_id),
+                sessionId: String(created.session_id),
+                direction: "in",
+            });
+            if (objectKey) {
+                await sessionsRepo.updateSessionImageUrl(created.session_id, "image_in_url", objectKey);
+                created.image_in_url = objectKey;
+            }
+        }
+
         return created;
     } catch (error) {
         try {

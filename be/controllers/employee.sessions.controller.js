@@ -10,6 +10,8 @@ const {
     RFID_CHECKIN_ENABLED,
 } = require("../config/constants");
 const checkoutService = require("../services/checkout.service");
+const { uploadCheckinImage, uploadCheckoutImage, isBase64Image } = require("../services/image.upload.helper");
+const { getPresignedUrl } = require("../services/minio.service");
 
 // Vehicle Entry - Create a new parking session
 exports.checkInVehicle = async (req, res) => {
@@ -89,6 +91,7 @@ exports.checkInVehicle = async (req, res) => {
         // Create new session with the employee's assigned lot
         // Atomic capacity check happens at database level
         let newSession;
+        let hasBase64Image = false;
         try {
             const startSessionPayload = {
                 lot_id: parkingLot.lot_id,
@@ -106,7 +109,9 @@ exports.checkInVehicle = async (req, res) => {
             if (entry_lane_id !== undefined) {
                 startSessionPayload.entry_lane_id = entry_lane_id;
             }
-            if (image_in_url !== undefined) {
+            // If image_in_url is base64, defer upload until after session creation
+            hasBase64Image = isBase64Image(image_in_url);
+            if (image_in_url !== undefined && !hasBase64Image) {
                 startSessionPayload.image_in_url = image_in_url;
             }
             if (metadata_in !== undefined) {
@@ -144,6 +149,19 @@ exports.checkInVehicle = async (req, res) => {
                 success: false,
                 message: `Parking lot is full for ${vehicle_type.toLowerCase()}s`,
             });
+        }
+
+        // Upload base64 image to MinIO after session creation (non-blocking for session)
+        if (hasBase64Image) {
+            const objectKey = await uploadCheckinImage(image_in_url, {
+                lotId: String(parkingLot.lot_id),
+                sessionId: String(newSession.session_id),
+                direction: "in",
+            });
+            if (objectKey) {
+                await sessionsRepo.updateSessionImageUrl(newSession.session_id, "image_in_url", objectKey);
+                newSession.image_in_url = objectKey;
+            }
         }
 
         // Generate ticket with QR/barcode data
@@ -225,10 +243,15 @@ exports.checkInByRfid = async (req, res) => {
         }
 
         let newSession;
+        let hasBase64Image = isBase64Image(image_in_url);
         try {
             const today = getToday();
             const monthlyPass = await sessionsRepo.checkMonthlySubByCard(card_uid, vehicle_type, today);
-            const optionalFields = { etag_epc, entry_lane_id, image_in_url, metadata_in };
+            const optionalFields = { etag_epc, entry_lane_id, metadata_in };
+            // Only pass image_in_url if it's NOT base64 (backward compat for URLs)
+            if (image_in_url !== undefined && !hasBase64Image) {
+                optionalFields.image_in_url = image_in_url;
+            }
             const startSessionPayload = {
                 lot_id: parkingLot.lot_id,
                 license_plate: null,
@@ -265,6 +288,19 @@ exports.checkInByRfid = async (req, res) => {
                 success: false,
                 message: `Parking lot is full for ${vehicle_type.toLowerCase()}s`,
             });
+        }
+
+        // Upload base64 image to MinIO after session creation (non-blocking for session)
+        if (hasBase64Image) {
+            const objectKey = await uploadCheckinImage(image_in_url, {
+                lotId: String(parkingLot.lot_id),
+                sessionId: String(newSession.session_id),
+                direction: "in",
+            });
+            if (objectKey) {
+                await sessionsRepo.updateSessionImageUrl(newSession.session_id, "image_in_url", objectKey);
+                newSession.image_in_url = objectKey;
+            }
         }
 
         const ticket = {
@@ -335,6 +371,18 @@ exports.initiateCheckout = async (req, res) => {
             });
         }
 
+        // Generate presigned URLs for session images
+        let image_in_presigned = null;
+        let image_out_presigned = null;
+        try {
+            [image_in_presigned, image_out_presigned] = await Promise.all([
+                session.image_in_url ? getPresignedUrl(session.image_in_url) : null,
+                session.image_out_url ? getPresignedUrl(session.image_out_url) : null,
+            ]);
+        } catch (_) {
+            // Never let presigned URL failure break the response
+        }
+
         // Don't create a pending payment yet - just return the calculated info
         res.status(200).json({
             success: true,
@@ -343,7 +391,11 @@ exports.initiateCheckout = async (req, res) => {
             hours: feeResult.hours,
             serviceFee: feeResult.serviceFee,
             penaltyFee: feeResult.penaltyFee,
-            session_details: session,
+            session_details: {
+                ...session,
+                image_in_presigned,
+                image_out_presigned,
+            },
         });
     } catch (error) {
         console.error("Initiate checkout error:", error);
@@ -358,7 +410,7 @@ exports.initiateCheckout = async (req, res) => {
 // Vehicle Exit - Stage 2: Confirm payment and complete checkout
 exports.confirmCheckout = async (req, res) => {
     try {
-        const { session_id, payment_method } = req.body;
+        const { session_id, payment_method, image_out_base64 } = req.body;
 
         if (!session_id || !payment_method) {
             return res.status(422).json({
@@ -438,6 +490,18 @@ exports.confirmCheckout = async (req, res) => {
                 time_out: cashResult.finalized ? new Date().toISOString() : session.time_out,
             },
         });
+
+        // Fire-and-forget: upload check-out image to MinIO after response is sent
+        if (image_out_base64) {
+            uploadCheckoutImage(image_out_base64, {
+                lotId: String(session.lot_id),
+                sessionId: String(session_id),
+            }).then((objectKey) => {
+                if (objectKey) {
+                    return sessionsRepo.updateSessionImageUrl(Number(session_id), "image_out_url", objectKey);
+                }
+            }).catch(() => {}); // swallow — errors are logged inside helper
+        }
     } catch (error) {
         console.error("Confirm checkout error:", error);
         res.status(500).json({
