@@ -199,6 +199,49 @@ export async function fetchParkingDuration() {
     return res.data.data;
 }
 
+// ===================== CAMERAS =====================
+// Fetch all cameras
+export async function fetchCameras() {
+    const res = await api.get("/admin/cameras");
+    return res.data.data;
+}
+
+// Fetch camera status (with computed online/offline/disabled)
+export async function fetchCameraStatus() {
+    const res = await api.get("/admin/cameras/status");
+    return res.data.data;
+}
+
+// Create a new camera
+export async function createCamera(camera) {
+    const res = await api.post("/admin/cameras", camera);
+    return res.data.data;
+}
+
+// Update a camera
+export async function updateCamera(id, camera) {
+    const res = await api.put(`/admin/cameras/${id}`, camera);
+    return res.data.data;
+}
+
+// Delete a camera
+export async function deleteCamera(id) {
+    const res = await api.delete(`/admin/cameras/${id}`);
+    return res.data.data;
+}
+
+// Enable a module for a camera
+export async function enableCameraModule(cameraId, moduleType, configJson = {}) {
+    const res = await api.post(`/admin/cameras/${cameraId}/modules`, { module_type: moduleType, config_json: configJson });
+    return res.data.data;
+}
+
+// Disable a module for a camera
+export async function disableCameraModule(cameraId, moduleType) {
+    const res = await api.delete(`/admin/cameras/${cameraId}/modules/${moduleType}`);
+    return res.data.data;
+}
+
 // ===================== FEE CONFIG V2 =====================
 // Fetch active fee configs for both vehicle types
 export async function getActiveFeeConfigs() {

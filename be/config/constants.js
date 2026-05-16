@@ -85,6 +85,10 @@ const PAYOS_DEFAULT_CANCEL_URL =
     process.env.PAYOS_CANCEL_URL || 'http://localhost:3000/employee/checkout';
 const PAYOS_QR_TTL_MINUTES = parseInt(process.env.PAYOS_QR_TTL_MINUTES || '15', 10);
 
+// Camera Management
+const PROCESSING_MODULES = ["LPD"];
+const CAMERA_OFFLINE_THRESHOLD_SECONDS = 60;
+
 // Feature Flags
 const PAYMENT_INTENT_V2_ENABLED = String(process.env.PAYMENT_INTENT_V2_ENABLED || 'true') === 'true';
 const RFID_CHECKIN_ENABLED = String(process.env.RFID_CHECKIN_ENABLED || 'true') === 'true';
@@ -130,6 +134,10 @@ module.exports = {
     PAYOS_DEFAULT_RETURN_URL,
     PAYOS_DEFAULT_CANCEL_URL,
     PAYOS_QR_TTL_MINUTES,
+
+    // Camera Management
+    PROCESSING_MODULES,
+    CAMERA_OFFLINE_THRESHOLD_SECONDS,
 
     // Feature Flags
     PAYMENT_INTENT_V2_ENABLED,

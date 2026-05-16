@@ -12,6 +12,7 @@ const adminFeeConfigController = require("../controllers/admin.feeConfig.control
 const adminNotiController = require("../controllers/admin.noti.controller");
 const adminLostTicketController = require("../controllers/admin.lostticket.controller");
 const adminAnalyticsController = require("../controllers/admin.analytics.controller");
+const adminCameraController = require("../controllers/admin.camera.controller");
 
 const { hasPermission } = require("../middlewares/auth.middleware");
 
@@ -75,5 +76,15 @@ router.get("/analytics/occupancy", adminAnalyticsController.getParkingLotOccupan
 router.get("/analytics/popular-times", adminAnalyticsController.getPopularTimes);
 router.get("/analytics/vehicle-usage", adminAnalyticsController.getVehicleUsage);
 router.get("/analytics/parking-duration", adminAnalyticsController.getParkingDuration);
+
+// Cameras Management
+router.get("/cameras", adminCameraController.listCameras);
+router.post("/cameras", adminCameraController.createCamera);
+router.get("/cameras/status", adminCameraController.getCameraStatus);
+router.get("/cameras/:camera_id", adminCameraController.getCameraById);
+router.put("/cameras/:camera_id", adminCameraController.updateCamera);
+router.delete("/cameras/:camera_id", adminCameraController.deleteCamera);
+router.post("/cameras/:camera_id/modules", adminCameraController.enableModule);
+router.delete("/cameras/:camera_id/modules/:module_type", adminCameraController.disableModule);
 
 module.exports = router;
