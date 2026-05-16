@@ -638,6 +638,18 @@ exports.enrichRecentSessionByLane = async (payload, options = pool) => {
     }
 };
 
+exports.updateSessionImageUrl = async (sessionId, column, objectKey, client = pool) => {
+    const allowedColumns = ["image_in_url", "image_out_url"];
+    if (!allowedColumns.includes(column)) {
+        throw new Error(`Invalid image column: ${column}`);
+    }
+    const result = await client.query(
+        `UPDATE ParkingSessions SET ${column} = $1 WHERE session_id = $2 RETURNING session_id`,
+        [objectKey, sessionId]
+    );
+    return result.rows[0] || null;
+};
+
 exports.closeSession = async (sessionId, client = pool) => {
     const result = await client.query(
         `UPDATE ParkingSessions

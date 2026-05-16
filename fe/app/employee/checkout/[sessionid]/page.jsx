@@ -22,8 +22,10 @@ import {
     FaSync,
     FaIdCard,
     FaExclamationTriangle,
+    FaImage,
 } from "react-icons/fa";
 import PayOSEmbed from "@/app/components/payment/PayOSEmbed";
+import SessionImage from "@/app/components/common/SessionImage";
 
 const CARD_STATUS_LABELS = {
     PENDING: "Pending payment",
@@ -556,6 +558,32 @@ export default function PaymentDetailsPage() {
                                     <span className="text-sm text-gray-500">Penalty Fee:</span>
                                     <span className="text-sm font-medium">{formatCurrency(checkout.penaltyFee)}</span>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                        <div className="mb-4">
+                            <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                                <FaImage className="mr-2 text-blue-500" />
+                                Session Images
+                            </h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <p className="text-sm text-gray-500 mb-2">Check-in Image</p>
+                                <SessionImage
+                                    objectKey={checkout.session.image_in_url}
+                                    type="in"
+                                    sessionId={sessionid}
+                                />
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-500 mb-2">Check-out Image</p>
+                                <SessionImage
+                                    objectKey={checkout.session.image_out_url}
+                                    type="out"
+                                    sessionId={sessionid}
+                                />
                             </div>
                         </div>
                     </div>

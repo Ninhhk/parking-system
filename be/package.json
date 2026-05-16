@@ -23,6 +23,7 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.5.2",
     "express-session": "^1.18.1",
+    "minio": "^8.0.7",
     "morgan": "^1.10.0",
     "pg": "^8.15.6"
   },
