@@ -14,6 +14,7 @@ import VehicleFormPanel from "./components/VehicleFormPanel";
 import ResultPanel from "./components/ResultPanel";
 import GateStatusPanel from "./components/GateStatusPanel";
 import RecentEventsPanel from "./components/RecentEventsPanel";
+import KioskCameraPanel from "./components/KioskCameraPanel";
 
 export default function RfidKioskPage() {
     const flags = useMemo(() => getRfidKioskFlags(), []);
@@ -29,6 +30,7 @@ export default function RfidKioskPage() {
     const [ticket, setTicket] = useState(null);
     const [events, setEvents] = useState([]);
     const eventIdRef = useRef(0);
+    const cameraRef = useRef(null);
 
     if (missingRequiredModules.length > 0) {
         return (
@@ -77,10 +79,14 @@ export default function RfidKioskPage() {
         setResultDetail("");
         setTicket(null);
 
+        // Auto-capture image from camera
+        const image_in_url = cameraRef.current?.capture() || undefined;
+
         try {
             const response = await checkInByRfid({
                 card_uid: cardUid,
                 vehicle_type: form.vehicle_type,
+                image_in_url,
             });
 
             setKioskState(KIOSK_STATES.SUCCESS);
@@ -108,6 +114,8 @@ export default function RfidKioskPage() {
     return (
         <main className="mx-auto max-w-4xl space-y-4 p-6">
             <h1 className="text-2xl font-bold text-slate-900">RFID Check-in Kiosk</h1>
+
+            <KioskCameraPanel ref={cameraRef} />
 
             {showReader ? <ReaderPanel value={form.card_uid} onChange={handleChange} disabled={isScanning} /> : null}
 

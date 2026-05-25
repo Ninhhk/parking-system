@@ -12,8 +12,8 @@ import {
     HiX,
     HiIdentification,
     HiQuestionMarkCircle,
-    HiOutlineCash,
     HiSpeakerphone,
+    HiVideoCamera,
 } from "react-icons/hi";
 import { HiCheckBadge, HiDocumentCurrencyDollar, HiPresentationChartLine, HiSpeakerXMark } from "react-icons/hi2";
 
@@ -76,19 +76,15 @@ const Sidebar = () => {
             icon: <HiPresentationChartLine className="mr-3 h-6 w-6" />,
         },
         {
-            name: "Configurations",
-            href: "/admin/config",
+            name: "Cameras",
+            href: "/admin/cameras",
+            icon: <HiVideoCamera className="mr-3 h-6 w-6" />,
+        },
+        {
+            name: "Pricing Engine",
+            href: "/admin/fee-config",
             icon: <HiCog className="mr-3 h-6 w-6" />,
         },
-        ...(user?.permissions?.can_edit_fees === true
-            ? [
-                  {
-                      name: "Pricing Engine",
-                      href: "/admin/fee-config",
-                      icon: <HiOutlineCash className="mr-3 h-6 w-6" />,
-                  },
-              ]
-            : []),
         {
             name: "Notifications",
             href: "/admin/notifications",

@@ -8,9 +8,11 @@ import PageHeader from "../../components/admin/PageHeader";
 import CameraTable from "../../components/admin/CameraTable";
 import CameraForm from "../../components/admin/CameraForm";
 import CameraModulePanel from "../../components/admin/CameraModulePanel";
+import CameraLivePreview from "../../components/admin/CameraLivePreview";
 import {
     fetchCameras,
     fetchCameraStatus,
+    fetchAvailableLanes,
     createCamera,
     updateCamera,
     deleteCamera,
@@ -18,13 +20,17 @@ import {
     disableCameraModule,
 } from "../../api/admin.client";
 
+const AVAILABLE_MODULES = ["LPD"];
+
 export default function CamerasPage() {
     const router = useRouter();
     const { user } = useUser();
 
     const [cameras, setCameras] = useState([]);
     const [statusData, setStatusData] = useState([]);
+    const [lanes, setLanes] = useState([]);
     const [selectedCamera, setSelectedCamera] = useState(null);
+    const [cameraModules, setCameraModules] = useState([]);
     const [formMode, setFormMode] = useState(null); // null | "add" | "edit"
     const [loading, setLoading] = useState(true);
 
@@ -50,6 +56,13 @@ export default function CamerasPage() {
     useEffect(() => {
         loadCameras();
     }, [loadCameras]);
+
+    // Fetch available lanes on mount
+    useEffect(() => {
+        fetchAvailableLanes()
+            .then(setLanes)
+            .catch(() => setLanes([]));
+    }, []);
 
     // Poll /status every 30 seconds
     useEffect(() => {
@@ -109,8 +122,10 @@ export default function CamerasPage() {
             await enableCameraModule(cameraId, moduleType);
             toast.success(`Module ${moduleType} enabled`);
             loadCameras();
+            return true;
         } catch (err) {
             toast.error(err.response?.data?.message || "Failed to enable module");
+            return false;
         }
     };
 
@@ -119,13 +134,23 @@ export default function CamerasPage() {
             await disableCameraModule(cameraId, moduleType);
             toast.success(`Module ${moduleType} disabled`);
             loadCameras();
+            return true;
         } catch (err) {
             toast.error(err.response?.data?.message || "Failed to disable module");
+            return false;
         }
+    };
+
+    const handleToggleModule = async (cameraId, moduleType, enable) => {
+        if (enable) {
+            return handleEnableModule(cameraId, moduleType);
+        }
+        return handleDisableModule(cameraId, moduleType);
     };
 
     const handleSelectCamera = (camera) => {
         setSelectedCamera(camera);
+        setCameraModules(camera.modules || []);
         setFormMode(null);
     };
 
@@ -158,7 +183,10 @@ export default function CamerasPage() {
                         statusData={statusData}
                         loading={loading}
                         selectedCameraId={selectedCamera?.camera_id}
-                        onSelect={handleSelectCamera}
+                        onSelectCamera={(cameraId) => {
+                            const cam = cameras.find((c) => c.camera_id === cameraId);
+                            if (cam) handleSelectCamera(cam);
+                        }}
                         onEdit={handleEditClick}
                         onDelete={handleDeleteCamera}
                     />
@@ -169,6 +197,7 @@ export default function CamerasPage() {
                     {formMode === "add" && (
                         <CameraForm
                             mode="add"
+                            lanes={lanes}
                             onSubmit={handleAddCamera}
                             onCancel={() => setFormMode(null)}
                         />
@@ -177,6 +206,7 @@ export default function CamerasPage() {
                     {formMode === "edit" && selectedCamera && (
                         <CameraForm
                             mode="edit"
+                            lanes={lanes}
                             initialData={selectedCamera}
                             onSubmit={handleEditCamera}
                             onCancel={() => {
@@ -187,11 +217,16 @@ export default function CamerasPage() {
                     )}
 
                     {!formMode && selectedCamera && (
-                        <CameraModulePanel
-                            camera={selectedCamera}
-                            onEnableModule={handleEnableModule}
-                            onDisableModule={handleDisableModule}
-                        />
+                        <div className="space-y-4">
+                            <CameraLivePreview camera={selectedCamera} />
+                            <CameraModulePanel
+                                camera={selectedCamera}
+                                modules={cameraModules}
+                                availableModules={AVAILABLE_MODULES}
+                                onToggleModule={handleToggleModule}
+                                onDeleteCamera={handleDeleteCamera}
+                            />
+                        </div>
                     )}
 
                     {!formMode && !selectedCamera && (

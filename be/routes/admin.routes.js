@@ -79,6 +79,7 @@ router.get("/analytics/parking-duration", adminAnalyticsController.getParkingDur
 
 // Cameras Management
 router.get("/cameras", adminCameraController.listCameras);
+router.get("/cameras/lanes", adminCameraController.getAvailableLanes);
 router.post("/cameras", adminCameraController.createCamera);
 router.get("/cameras/status", adminCameraController.getCameraStatus);
 router.get("/cameras/:camera_id", adminCameraController.getCameraById);

@@ -45,10 +45,11 @@ export async function initiateCheckout(sessionId) {
 }
 
 // Confirm payment and complete check-out (Exit Stage 2) - Creates payment record and updates session
-export async function confirmCheckout(sessionId, paymentMethod) {
+export async function confirmCheckout(sessionId, paymentMethod, imageOutBase64) {
     const res = await api.post("/employee/parking/exit/confirm", {
         session_id: sessionId,
         payment_method: paymentMethod,
+        image_out_base64: imageOutBase64 || undefined,
     });
     return res.data;
 }

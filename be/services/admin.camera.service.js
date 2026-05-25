@@ -64,7 +64,12 @@ function createError(statusCode, message) {
 }
 
 exports.listCameras = async () => {
-    return cameraRepo.findAll();
+    const cameras = await cameraRepo.findAll();
+    // Attach module assignments to each camera
+    for (const cam of cameras) {
+        cam.modules = await cameraRepo.findModulesByCameraId(cam.camera_id);
+    }
+    return cameras;
 };
 
 exports.createCamera = async ({ camera_name, lane_id, direction, purpose, stream_url }) => {

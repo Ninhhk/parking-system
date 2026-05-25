@@ -206,6 +206,12 @@ export async function fetchCameras() {
     return res.data.data;
 }
 
+// Fetch available lanes from gateway config
+export async function fetchAvailableLanes() {
+    const res = await api.get("/admin/cameras/lanes");
+    return res.data.data;
+}
+
 // Fetch camera status (with computed online/offline/disabled)
 export async function fetchCameraStatus() {
     const res = await api.get("/admin/cameras/status");

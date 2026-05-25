@@ -1,4 +1,5 @@
 const cameraService = require("../services/admin.camera.service");
+const gatewayConfig = require("../config/edge_gateways.json");
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -19,6 +20,20 @@ exports.listCameras = async (req, res) => {
     } catch (err) {
         return handleServiceError(res, err);
     }
+};
+
+exports.getAvailableLanes = (req, res) => {
+    const lanes = [];
+    for (const gw of gatewayConfig.gateways) {
+        for (const lane of gw.lanes) {
+            lanes.push({
+                lane_id: lane.lane_id,
+                lane_direction: lane.lane_direction,
+                gateway_id: gw.gateway_id,
+            });
+        }
+    }
+    return res.status(200).json({ success: true, data: lanes });
 };
 
 exports.createCamera = async (req, res) => {
