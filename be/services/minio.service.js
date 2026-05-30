@@ -1,7 +1,6 @@
 // Feature: minio-image-storage
 // Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.2, 3.3, 3.4
 
-const Minio = require("minio");
 const {
     minioClient,
     MINIO_BUCKET,
@@ -10,15 +9,18 @@ const {
     MINIO_EXTERNAL_PORT,
 } = require("../config/minio");
 
-// Separate client using external (browser-reachable) endpoint for presigned URLs
-let externalClient = null;
+// Client configured with browser-reachable endpoint for presigned URL generation.
+// Uses region 'us-east-1' explicitly to avoid the SDK making a network call to discover it.
+const Minio = require("minio");
+let presignClient = null;
 if (isMinioConfigured) {
-    externalClient = new Minio.Client({
+    presignClient = new Minio.Client({
         endPoint: MINIO_EXTERNAL_ENDPOINT,
         port: MINIO_EXTERNAL_PORT,
         useSSL: process.env.MINIO_USE_SSL === "true",
         accessKey: process.env.MINIO_ACCESS_KEY,
         secretKey: process.env.MINIO_SECRET_KEY,
+        region: "us-east-1",
     });
 }
 
@@ -93,17 +95,18 @@ async function uploadImage(buffer, { lotId, sessionId, direction, ext }) {
 
 /**
  * Generates a presigned GET URL for an object in MinIO.
- * Uses the external client so URLs are browser-reachable.
+ * Uses the presignClient configured with the browser-reachable endpoint
+ * and explicit region to avoid network calls during URL generation.
  *
  * @param {string} objectKey - The object key in the bucket
  * @returns {Promise<string|null>} Presigned URL or null on any failure
  */
 async function getPresignedUrl(objectKey) {
-    if (!isMinioConfigured || !objectKey) {
+    if (!isMinioConfigured || !presignClient || !objectKey) {
         return null;
     }
     try {
-        const url = await externalClient.presignedGetObject(MINIO_BUCKET, objectKey, 3600);
+        const url = await presignClient.presignedGetObject(MINIO_BUCKET, objectKey, 3600);
         return url;
     } catch (err) {
         return null;

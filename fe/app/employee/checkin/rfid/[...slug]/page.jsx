@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function RfidRedirect() {
+export default function RfidCatchAllRedirect() {
     redirect("/employee/checkin");
 }

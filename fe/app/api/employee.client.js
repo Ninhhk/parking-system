@@ -45,10 +45,11 @@ export async function initiateCheckout(sessionId) {
 }
 
 // Confirm payment and complete check-out (Exit Stage 2) - Creates payment record and updates session
-export async function confirmCheckout(sessionId, paymentMethod) {
+export async function confirmCheckout(sessionId, paymentMethod, imageOutBase64) {
     const res = await api.post("/employee/parking/exit/confirm", {
         session_id: sessionId,
         payment_method: paymentMethod,
+        image_out_base64: imageOutBase64 || undefined,
     });
     return res.data;
 }
@@ -101,4 +102,16 @@ export async function updateMyProfile(profileData) {
 export async function deleteLostTicket(session_id) {
     const res = await api.delete(`/employee/lost-tickets/${session_id}`);
     return res.data;
+}
+
+// Fetch lane configuration for the unified check-in kiosk
+export async function getGatewayLaneConfig(laneId) {
+    const res = await api.get(`/employee/gateway-config/${laneId}`);
+    return res.data.data;
+}
+
+// Look up active subscription by RFID card UID
+export async function getSubscriptionByCard(cardUid) {
+    const res = await api.get(`/employee/subscription/by-card/${cardUid}`);
+    return res.data.data;
 }

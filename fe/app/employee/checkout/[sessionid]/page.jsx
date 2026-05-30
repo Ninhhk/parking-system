@@ -26,6 +26,7 @@ import {
 } from "react-icons/fa";
 import PayOSEmbed from "@/app/components/payment/PayOSEmbed";
 import SessionImage from "@/app/components/common/SessionImage";
+import KioskCameraPanel from "@/app/employee/checkin/components/KioskCameraPanel";
 
 const CARD_STATUS_LABELS = {
     PENDING: "Pending payment",
@@ -91,6 +92,7 @@ export default function PaymentDetailsPage() {
     const [regenerateCooldown, setRegenerateCooldown] = useState(0);
     const embedElementId = `payos-embed-${sessionid}-${embedVersion}`;
     const isMountedRef = useRef(true);
+    const checkoutCameraRef = useRef(null);
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -157,9 +159,13 @@ export default function PaymentDetailsPage() {
             toast.error("CARD payment is completed automatically after webhook confirmation");
             return;
         }
+
+        // Auto-capture exit image
+        const imageOutBase64 = checkoutCameraRef.current?.capture() || undefined;
+
         setLoading(true);
         try {
-            const result = await confirmCheckout(sessionid, paymentMethod);
+            const result = await confirmCheckout(sessionid, paymentMethod, imageOutBase64);
             setCheckout((prev) => ({
                 ...prev,
                 amount: result.amount,
@@ -586,6 +592,16 @@ export default function PaymentDetailsPage() {
                                 />
                             </div>
                         </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                        <div className="mb-4">
+                            <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                                <FaImage className="mr-2 text-blue-500" />
+                                Exit Camera
+                            </h3>
+                            <p className="text-sm text-gray-500 mt-1">Image will be captured automatically on checkout confirmation</p>
+                        </div>
+                        <KioskCameraPanel ref={checkoutCameraRef} />
                     </div>
                     <div className="bg-gray-50 rounded-lg p-4 mb-6">
                         <div className="mb-4">

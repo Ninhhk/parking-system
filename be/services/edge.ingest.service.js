@@ -2,6 +2,7 @@ const { pool } = require("../config/db");
 const { EDGE_LPD_CORRELATION_WINDOW_SECONDS } = require("../config/constants");
 const edgeEventsRepo = require("../repositories/edge.events.repo");
 const sessionsRepo = require("../repositories/employee.sessions.repo");
+const cameraService = require("./admin.camera.service");
 const { sanitizePlate } = require("../utils/licensePlate");
 const gatewayConfig = require("../config/edge_gateways.json");
 
@@ -190,6 +191,30 @@ exports.ingestEvent = async (payload, options = {}) => {
             }
         }
 
+        // --- Camera integration: heartbeat + module routing ---
+        const cameraId = normalizedPayload.camera_id || null;
+        if (cameraId) {
+            await cameraService.updateHeartbeat(cameraId);
+
+            const enabledModules = await cameraService.getEnabledModules(cameraId);
+            if (!enabledModules || enabledModules.length === 0) {
+                console.log(`[edge.ingest] camera_id=${cameraId}: no enabled modules, skipping processing`);
+                await edgeEventsRepo.markSuccess(
+                    { eventId: normalizedPayload.event_id, sessionId: null },
+                    client
+                );
+                await client.query("COMMIT");
+                return {
+                    duplicate: false,
+                    status: "SUCCESS",
+                    action: "NO_ENABLED_MODULES",
+                    event_id: normalizedPayload.event_id,
+                    session_id: null,
+                };
+            }
+        }
+        // --- End camera integration ---
+
         const direction = resolveLaneDirection(normalizedPayload);
         const resolvedTriggerValue = normalizedPayload.trigger.value || null;
 
@@ -250,6 +275,34 @@ exports.ingestEvent = async (payload, options = {}) => {
         }
 
         if (triggerType === LPD_TRIGGER) {
+            // --- Camera integration: verify active plate camera for LPD ---
+            if (cameraId) {
+                const activePlateCamera = await cameraService.getActivePlateCamera(
+                    normalizedPayload.lane_id,
+                    direction
+                );
+                if (!activePlateCamera) {
+                    console.warn(`[edge.ingest] lane_id=${normalizedPayload.lane_id} direction=${direction}: no active plate camera configured, skipping LPD`);
+                    await edgeEventsRepo.markFailed(
+                        {
+                            eventId: normalizedPayload.event_id,
+                            errorCode: "LPD_NO_PLATE_CAMERA",
+                            errorMessage: "No active plate camera configured for this lane/direction",
+                        },
+                        client
+                    );
+                    await client.query("COMMIT");
+                    return {
+                        duplicate: false,
+                        status: "FAILED",
+                        action: "LPD_NO_PLATE_CAMERA",
+                        event_id: normalizedPayload.event_id,
+                        session_id: null,
+                    };
+                }
+            }
+            // --- End camera integration ---
+
             const lpdPlate = sanitizePlate(normalizedPayload.trigger.value || normalizedPayload.trigger.plate || "");
             const enrichedSession = await sessionsRepo.enrichRecentSessionByLane(
                 {
