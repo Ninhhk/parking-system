@@ -207,6 +207,7 @@ exports.checkInByRfid = async (req, res) => {
             image_in_url,
             metadata_in,
             vehicle_type,
+            license_plate,
         } = req.body;
 
         if (!card_uid || !vehicle_type) {
@@ -254,7 +255,7 @@ exports.checkInByRfid = async (req, res) => {
             }
             const startSessionPayload = {
                 lot_id: parkingLot.lot_id,
-                license_plate: null,
+                license_plate: license_plate || null,
                 card_uid,
                 vehicle_type,
                 is_monthly: !!monthlyPass,
@@ -267,7 +268,7 @@ exports.checkInByRfid = async (req, res) => {
         } catch (error) {
             if (
                 error.code === "23505" &&
-                ["uq_active_session_card_uid", "uq_active_session_etag_epc"].includes(error.constraint)
+                ["uq_active_session_card_uid", "uq_active_session_etag_epc", "uq_active_session_plate"].includes(error.constraint)
             ) {
                 return res.status(409).json({
                     success: false,

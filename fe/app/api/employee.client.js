@@ -103,3 +103,15 @@ export async function deleteLostTicket(session_id) {
     const res = await api.delete(`/employee/lost-tickets/${session_id}`);
     return res.data;
 }
+
+// Fetch lane configuration for the unified check-in kiosk
+export async function getGatewayLaneConfig(laneId) {
+    const res = await api.get(`/employee/gateway-config/${laneId}`);
+    return res.data.data;
+}
+
+// Look up active subscription by RFID card UID
+export async function getSubscriptionByCard(cardUid) {
+    const res = await api.get(`/employee/subscription/by-card/${cardUid}`);
+    return res.data.data;
+}

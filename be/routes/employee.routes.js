@@ -11,6 +11,17 @@ const profileController = require("../controllers/employee.profile.controller");
 const lpdController = require("../controllers/employee.lpd.controller");
 const employeePaymentController = require("../controllers/employee.payment.controller");
 const edgeController = require("../controllers/employee.edge.controller");
+const gatewayController = require("../controllers/employee.gateway.controller");
+const sessionAuditController = require("../controllers/session.audit.controller");
+const subscriptionController = require("../controllers/employee.subscription.controller");
+
+// Audit route — accessible by both employee and admin roles
+router.get(
+    "/audit/sessions",
+    authMiddleware.isAuthenticated,
+    authMiddleware.hasRole(["employee", "admin"]),
+    sessionAuditController.getAuditSessions
+);
 
 router.use(authMiddleware.isAuthenticated, authMiddleware.hasRole(["employee"]));
 
@@ -48,6 +59,12 @@ router.get("/sessions/:session_id/image-presigned", sessionsController.getImageP
 // Profile routes
 router.get("/profile", profileController.getMyProfile);
 router.put("/profile", profileController.changePassword);
+
+// Gateway config route
+router.get("/gateway-config/:lane_id", gatewayController.getLaneConfig);
+
+// Subscription lookup route
+router.get("/subscription/by-card/:card_uid", subscriptionController.getByCard);
 
 // License Plate Detection routes
 router.post("/parking/lpd-detect", lpdController.detectLicensePlate);

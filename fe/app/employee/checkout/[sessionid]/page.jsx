@@ -26,7 +26,7 @@ import {
 } from "react-icons/fa";
 import PayOSEmbed from "@/app/components/payment/PayOSEmbed";
 import SessionImage from "@/app/components/common/SessionImage";
-import KioskCameraPanel from "@/app/employee/checkin/rfid/components/KioskCameraPanel";
+import KioskCameraPanel from "@/app/employee/checkin/components/KioskCameraPanel";
 
 const CARD_STATUS_LABELS = {
     PENDING: "Pending payment",

@@ -94,21 +94,28 @@ const Sidebar = () => {
 
     // Render navigation links
     const renderNavigation = () => {
-        return navItems.map((item) => {
-            const active = isActive(item.href);
-            return (
-                <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`group flex items-center px-2 py-2 text-base font-medium rounded-md ${
-                        active ? "bg-indigo-100 text-indigo-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                    }`}
-                >
-                    {item.icon}
-                    {item.name}
-                </Link>
-            );
-        });
+        return navItems
+            .filter((item) => {
+                if (item.name === "Pricing Engine") {
+                    return !!user?.permissions?.can_edit_fees;
+                }
+                return true;
+            })
+            .map((item) => {
+                const active = isActive(item.href);
+                return (
+                    <Link
+                        key={item.name}
+                        href={item.href}
+                        className={`group flex items-center px-2 py-2 text-base font-medium rounded-md ${
+                            active ? "bg-indigo-100 text-indigo-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                        }`}
+                    >
+                        {item.icon}
+                        {item.name}
+                    </Link>
+                );
+            });
     };
 
     const handleLogout = async () => {

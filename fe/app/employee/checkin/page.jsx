@@ -1,340 +1,447 @@
 "use client";
 
-import { useState } from "react";
-import { checkInVehicle } from "../../api/employee.client";
-import { detectLicensePlate } from "../../api/employee.lpd.client";
-import { useToast } from "../../components/providers/ToastProvider";
-import PageHeader from "../../components/common/PageHeader";
-import { FaCar, FaMotorcycle, FaQrcode, FaPrint, FaRegClock, FaCheckCircle } from "react-icons/fa";
-import FormField from "../../components/common/FormField";
-import PrintableTicket from "../../components/common/PrintableTicket";
-import WebcamFeed from "../../components/common/WebcamFeed";
+import { useEffect, useRef, useState } from "react";
+import { getGatewayLaneConfig, getSubscriptionByCard, checkInByRfid } from "@/app/api/employee.client";
+import { detectLicensePlate } from "@/app/api/employee.lpd.client";
+import KioskCameraPanel from "./components/KioskCameraPanel";
+import ReaderPanel from "./components/ReaderPanel";
+import VehicleFormPanel from "./components/VehicleFormPanel";
+import ResultPanel from "./components/ResultPanel";
+import GateStatusPanel from "./components/GateStatusPanel";
 
-export default function CheckInPage() {
-    const toast = useToast();
-    const [loading, setLoading] = useState(false);
-    const [detectingPlate, setDetectingPlate] = useState(false);
+const LANE_ID = process.env.NEXT_PUBLIC_LANE_ID || "lane-card-lpd-1";
+
+const KIOSK_STATES = {
+    IDLE: "idle",
+    SCANNING: "scanning",
+    SUCCESS: "success",
+    DENIED: "denied",
+    ERROR: "error",
+};
+
+const STATUS_MESSAGES = {
+    [KIOSK_STATES.IDLE]: "Ready to scan",
+    [KIOSK_STATES.SCANNING]: "Scanning card...",
+    [KIOSK_STATES.SUCCESS]: "Access granted",
+    [KIOSK_STATES.DENIED]: "Access denied",
+    [KIOSK_STATES.ERROR]: "System error",
+};
+
+function getKioskStatusMessage(state) {
+    return STATUS_MESSAGES[state] || "Unknown status";
+}
+
+export default function UnifiedCheckinPage() {
+    // Lane config state
+    const [laneConfig, setLaneConfig] = useState(null);
+    const [laneConfigError, setLaneConfigError] = useState(null);
+    const [lpdEnabled, setLpdEnabled] = useState(false);
+
+    // Kiosk state machine
+    const [kioskState, setKioskState] = useState(KIOSK_STATES.IDLE);
+
+    // Form state
+    const [card_uid, setCardUid] = useState("");
+    const [vehicle_type, setVehicleType] = useState("");
+
+    // Subscription auto-resolve
+    const [subscription, setSubscription] = useState(null);
+    const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+    const [subscriptionError, setSubscriptionError] = useState(false);
+    const [vehicleTypeOverridden, setVehicleTypeOverridden] = useState(false);
+
+    // LPD
+    const [detectedPlate, setDetectedPlate] = useState(null);
+    const [lpdNotification, setLpdNotification] = useState(null); // { type: "success" | "warning", message }
+
+    // Camera
+    const [cameraStatus, setCameraStatus] = useState("connecting");
+    const cameraRef = useRef(null);
+
+    // Capture failure state
+    const [captureError, setCaptureError] = useState(false);
+
+    // Result
+    const [resultDetail, setResultDetail] = useState("");
     const [ticket, setTicket] = useState(null);
-    const [showCamera, setShowCamera] = useState(false);
-    const [plateDetected, setPlateDetected] = useState(false);
-    const [form, setForm] = useState({
-        license_plate: "",
-        vehicle_type: "car",
-    });
 
-    const handleChange = (e) => {
-        setForm({ ...form, [e.target.name]: e.target.value });
-    };
+    // Clock
+    const [currentTime, setCurrentTime] = useState("");
 
-    const handleLPDCapture = async (base64Image) => {
-        setDetectingPlate(true);
+    // Fetch lane config on mount with 5s timeout
+    useEffect(() => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        try {
-            const result = await detectLicensePlate(base64Image);
-
-            // Auto-populate license plate field
-            setForm({
-                ...form,
-                license_plate: result.normalized_plate,
+        getGatewayLaneConfig(LANE_ID)
+            .then((data) => {
+                clearTimeout(timeoutId);
+                setLaneConfig(data);
+                const lpd = Array.isArray(data.allowed_trigger_modules) &&
+                    data.allowed_trigger_modules.includes("LPD");
+                setLpdEnabled(lpd);
+            })
+            .catch((err) => {
+                clearTimeout(timeoutId);
+                const message = err.name === "AbortError"
+                    ? "Lane configuration request timed out"
+                    : "Failed to load lane configuration";
+                setLaneConfigError(message);
+                setLpdEnabled(false);
             });
 
-            setShowCamera(false);
-            setPlateDetected(true);
+        return () => {
+            clearTimeout(timeoutId);
+            controller.abort();
+        };
+    }, []);
 
-            // Show success message
-            toast.success(`License plate detected: ${result.normalized_plate}`);
+    // Clock tick
+    useEffect(() => {
+        const updateClock = () => {
+            const now = new Date();
+            setCurrentTime(now.toLocaleTimeString("en-US", { hour12: false }));
+        };
+        updateClock();
+        const timer = setInterval(updateClock, 1000);
+        return () => clearInterval(timer);
+    }, []);
 
-            // Clear detection flag after 3 seconds
-            setTimeout(() => setPlateDetected(false), 3000);
-        } catch (error) {
-            console.error("LPD error:", error);
-            const errorMessage = error.message || "Failed to detect license plate";
-            toast.error(errorMessage);
-        } finally {
-            setDetectingPlate(false);
+    const isScanning = kioskState === KIOSK_STATES.SCANNING;
+
+    const handleCardChange = (e) => {
+        setCardUid(e.target.value);
+    };
+
+    const handleVehicleTypeChange = (e) => {
+        setVehicleType(e.target.value);
+        if (subscription) {
+            setVehicleTypeOverridden(true);
         }
     };
 
-    const handleLPDError = (errorMessage) => {
-        toast.error(errorMessage);
-    };
+    // Scan flow: Enter key in ReaderPanel triggers subscription lookup
+    const handleScan = async () => {
+        if (isScanning) return;
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
+        const cardUid = card_uid.trim();
+        if (!cardUid) return;
+
+        setKioskState(KIOSK_STATES.SCANNING);
+        setSubscription(null);
+        setSubscriptionLoading(true);
+        setSubscriptionError(false);
+        setVehicleTypeOverridden(false);
+        setVehicleType("");
+        setResultDetail("");
         setTicket(null);
 
-        try {
-            const response = await checkInVehicle({
-                ...form,
-            });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-            if (response.success) {
-                toast.success("Vehicle checked in successfully");
-                setForm({
-                    ...form,
-                    license_plate: "",
-                });
-                setTicket(response.ticket);
+        try {
+            const data = await getSubscriptionByCard(cardUid);
+            clearTimeout(timeoutId);
+            // Subscription found — auto-fill vehicle type
+            setSubscription(data);
+            setVehicleType(data.vehicle_type || "");
+        } catch (err) {
+            clearTimeout(timeoutId);
+            if (err?.response?.status === 404) {
+                // No subscription — leave vehicle type empty for manual selection
+                setSubscription(null);
             } else {
-                toast.error(response.message || "Failed to check in vehicle");
+                // Network/server error — show error, fall back to manual
+                setSubscription(null);
+                setSubscriptionError(true);
             }
-        } catch (error) {
-            console.error("Check-in error:", error);
-            const errorMessage = error.response?.data?.message || "Failed to check in vehicle";
-            toast.error(errorMessage);
         } finally {
-            setLoading(false);
+            setSubscriptionLoading(false);
+            setKioskState(KIOSK_STATES.IDLE);
         }
     };
 
-    const formatDateTime = (dateStr) => {
-        const date = new Date(dateStr);
-        return date.toLocaleString();
+    // Submit flow: capture image, run LPD if enabled, then call checkInByRfid
+    const handleSubmit = async () => {
+        if (isScanning) return;
+
+        const cardUid = card_uid.trim();
+        if (!cardUid) return;
+        if (!vehicle_type) return;
+
+        setKioskState(KIOSK_STATES.SCANNING);
+        setResultDetail("");
+        setTicket(null);
+        setCaptureError(false);
+        setLpdNotification(null);
+        setDetectedPlate(null);
+
+        // Determine vehicle type: operator override takes precedence
+        const finalVehicleType = vehicleTypeOverridden ? vehicle_type : (subscription?.vehicle_type || vehicle_type);
+
+        // --- Camera capture ---
+        let imageInUrl = null;
+        let metadataIn = null;
+
+        if (laneConfig?.has_camera === false) {
+            // No camera configured — degraded mode
+            metadataIn = { no_camera_evidence: true };
+        } else {
+            // Attempt capture
+            const captured = cameraRef.current?.capture();
+            if (!captured) {
+                // Capture failed — block submission, show error with retry options
+                setCaptureError(true);
+                setKioskState(KIOSK_STATES.IDLE);
+                return;
+            }
+            imageInUrl = captured;
+        }
+
+        // --- LPD detection (if enabled and image available) ---
+        let licensePlate = null;
+
+        if (lpdEnabled && imageInUrl) {
+            try {
+                // Enforce a 10s deadline (Req 4.6) without blocking on the underlying request.
+                const timeout = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("LPD_TIMEOUT")), 10000)
+                );
+                const lpdResult = await Promise.race([detectLicensePlate(imageInUrl), timeout]);
+
+                if (lpdResult?.normalized_plate) {
+                    licensePlate = lpdResult.normalized_plate;
+                    setDetectedPlate(licensePlate);
+                    setLpdNotification({ type: "success", message: `Plate detected: ${licensePlate}` });
+                }
+            } catch (lpdErr) {
+                // LPD failed or timed out — proceed without plate
+                const msg = lpdErr.message === "LPD_TIMEOUT"
+                    ? "Plate detection timed out"
+                    : "Plate detection failed";
+                setLpdNotification({ type: "warning", message: `${msg}. Proceeding without plate.` });
+            }
+        }
+
+        // --- Build payload and submit ---
+        const payload = {
+            card_uid: cardUid,
+            vehicle_type: finalVehicleType,
+        };
+
+        if (imageInUrl) {
+            payload.image_in_url = imageInUrl;
+        }
+        if (licensePlate) {
+            payload.license_plate = licensePlate;
+        }
+        if (metadataIn) {
+            payload.metadata_in = metadataIn;
+        }
+
+        try {
+            const response = await checkInByRfid(payload);
+
+            setKioskState(KIOSK_STATES.SUCCESS);
+            setTicket(response.ticket || null);
+            setResultDetail(`Access granted for ${cardUid}`);
+        } catch (error) {
+            const statusCode = error?.response?.status;
+            if (statusCode === 409) {
+                setKioskState(KIOSK_STATES.DENIED);
+            } else {
+                setKioskState(KIOSK_STATES.ERROR);
+            }
+            const message = error?.response?.data?.message || "Check-in failed";
+            setResultDetail(message);
+        }
+    };
+
+    // Retry camera capture after failure
+    const handleRetryCapture = () => {
+        setCaptureError(false);
+        handleSubmit();
+    };
+
+    // Proceed without image after capture failure
+    const handleProceedWithoutImage = async () => {
+        setCaptureError(false);
+
+        if (isScanning) return;
+
+        const cardUid = card_uid.trim();
+        if (!cardUid) return;
+        if (!vehicle_type) return;
+
+        setKioskState(KIOSK_STATES.SCANNING);
+        setResultDetail("");
+        setTicket(null);
+        setLpdNotification(null);
+        setDetectedPlate(null);
+
+        const finalVehicleType = vehicleTypeOverridden ? vehicle_type : (subscription?.vehicle_type || vehicle_type);
+
+        const payload = {
+            card_uid: cardUid,
+            vehicle_type: finalVehicleType,
+            metadata_in: { no_camera_evidence: true },
+        };
+
+        try {
+            const response = await checkInByRfid(payload);
+            setKioskState(KIOSK_STATES.SUCCESS);
+            setTicket(response.ticket || null);
+            setResultDetail(`Access granted for ${cardUid}`);
+        } catch (error) {
+            const statusCode = error?.response?.status;
+            if (statusCode === 409) {
+                setKioskState(KIOSK_STATES.DENIED);
+            } else {
+                setKioskState(KIOSK_STATES.ERROR);
+            }
+            const message = error?.response?.data?.message || "Check-in failed";
+            setResultDetail(message);
+        }
     };
 
     return (
-        <div className="container mx-auto p-6">
-            <PageHeader title="Check-In Vehicle" />
+        <main className="mx-auto max-w-6xl p-6 bg-white text-slate-800 rounded-2xl border border-gray-200 shadow-sm my-4">
+            {/* Header */}
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-150 pb-4 mb-6 gap-3">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                        <h1 className="text-xl font-bold uppercase tracking-wider text-slate-900 font-mono">
+                            Check-in Kiosk
+                        </h1>
+                    </div>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">UNIFIED GATEWAY TERMINAL</p>
+                </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                    {/* Camera Feed Section */}
-                    {showCamera && (
-                        <div className="mb-6">
-                            <WebcamFeed
-                                onCapture={handleLPDCapture}
-                                isLoading={detectingPlate}
-                                onError={handleLPDError}
-                            />
+                <div className="flex items-center gap-4 text-xs font-mono">
+                    <div className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded flex items-center gap-2 text-slate-600 shadow-xs">
+                        <span className="text-slate-400 uppercase tracking-widest text-[9px]">CLOCK:</span>
+                        <span className="font-bold text-indigo-600 tracking-widest">{currentTime || "00:00:00"}</span>
+                    </div>
+                </div>
+            </header>
+
+            {/* Lane config warning banner */}
+            {laneConfigError && (
+                <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-3">
+                    <svg className="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                        <p className="text-sm font-medium text-amber-800">{laneConfigError}</p>
+                        <p className="text-xs text-amber-600 mt-0.5">LPD is disabled. Check-in will proceed without plate detection.</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Main grid layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left pane: Camera */}
+                <div className="lg:col-span-7 space-y-6 flex flex-col">
+                    <KioskCameraPanel ref={cameraRef} />
+
+                    {/* LPD status indicator — only shown when LPD is enabled */}
+                    {lpdEnabled && (
+                        <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-4 py-2.5 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                            <span className="text-xs font-mono font-semibold text-indigo-700 uppercase tracking-wider">
+                                LPD Active
+                            </span>
+                            <span className="text-xs text-indigo-500 ml-1">
+                                — Plate detection will run on submission
+                            </span>
                         </div>
                     )}
 
-                    <div className="bg-white shadow-md rounded-lg overflow-hidden">
-                        <div className="bg-blue-600 text-white px-6 py-4">
-                            <h2 className="text-xl font-semibold">Vehicle Information</h2>
-                            <p className="text-blue-100 text-sm">Enter details to create a new parking ticket</p>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="p-6">
-                            <div className="space-y-6">
-                                {/* License Plate Input Section */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <label className="block text-gray-700 font-medium">License Plate *</label>
-                                        {plateDetected && (
-                                            <span className="flex items-center text-green-600 text-sm">
-                                                <FaCheckCircle className="mr-1" /> Auto-detected
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <div className="flex-1">
-                                            <FormField
-                                                name="license_plate"
-                                                type="text"
-                                                value={form.license_plate}
-                                                onChange={handleChange}
-                                                required
-                                                placeholder="e.g., 51G-39466"
-                                            />
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowCamera(!showCamera)}
-                                            disabled={loading || detectingPlate}
-                                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors font-medium"
-                                        >
-                                            {showCamera ? "Close" : "Scan"}
-                                        </button>
-                                    </div>
-                                    <p className="text-gray-500 text-sm mt-2">
-                                        Click "Scan" to use camera for automatic plate detection
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <label className="block text-gray-700 font-medium mb-2">Vehicle Type *</label>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div
-                                            className={`border-2 rounded-md p-4 flex items-center cursor-pointer ${
-                                                form.vehicle_type === "car"
-                                                    ? "bg-blue-50 border-blue-500"
-                                                    : "hover:bg-gray-50"
-                                            }`}
-                                            onClick={() => setForm({ ...form, vehicle_type: "car" })}
-                                        >
-                                            <FaCar
-                                                className={`mr-3 h-5 w-5 ${
-                                                    form.vehicle_type === "car" ? "text-blue-500" : "text-gray-400"
-                                                }`}
-                                            />
-                                            <div>
-                                                <span
-                                                    className={`font-medium ${
-                                                        form.vehicle_type === "car" ? "text-blue-700" : "text-gray-700"
-                                                    }`}
-                                                >
-                                                    Car
-                                                </span>
-                                            </div>
-                                            <input
-                                                type="radio"
-                                                name="vehicle_type"
-                                                value="car"
-                                                checked={form.vehicle_type === "car"}
-                                                onChange={handleChange}
-                                                className="ml-auto"
-                                            />
-                                        </div>
-                                        <div
-                                            className={`border-2 rounded-md p-4 flex items-center cursor-pointer ${
-                                                form.vehicle_type === "bike"
-                                                    ? "bg-blue-50 border-blue-500"
-                                                    : "hover:bg-gray-50"
-                                            }`}
-                                            onClick={() => setForm({ ...form, vehicle_type: "bike" })}
-                                        >
-                                            <FaMotorcycle
-                                                className={`mr-3 h-5 w-5 ${
-                                                    form.vehicle_type === "bike" ? "text-blue-500" : "text-gray-400"
-                                                }`}
-                                            />
-                                            <div>
-                                                <span
-                                                    className={`font-medium ${
-                                                        form.vehicle_type === "bike" ? "text-blue-700" : "text-gray-700"
-                                                    }`}
-                                                >
-                                                    Motorcycle
-                                                </span>
-                                            </div>
-                                            <input
-                                                type="radio"
-                                                name="vehicle_type"
-                                                value="bike"
-                                                checked={form.vehicle_type === "bike"}
-                                                onChange={handleChange}
-                                                className="ml-auto"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
+                    {/* Capture failure error — blocks submission until resolved */}
+                    {captureError && (
+                        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
+                            <div className="flex items-center gap-2 mb-2">
+                                <svg className="w-5 h-5 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <p className="text-sm font-medium text-rose-800">Camera capture failed</p>
                             </div>
-
-                            <div className="mt-8">
+                            <p className="text-xs text-rose-600 mb-3">Unable to capture image from camera. The stream may be interrupted or permission revoked.</p>
+                            <div className="flex gap-2">
                                 <button
-                                    type="submit"
-                                    disabled={loading}
-                                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+                                    onClick={handleRetryCapture}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-rose-600 text-white hover:bg-rose-700 transition-colors"
                                 >
-                                    {loading ? "Processing..." : "Check In Vehicle"}
+                                    Retry
+                                </button>
+                                <button
+                                    onClick={handleProceedWithoutImage}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-rose-300 text-rose-700 hover:bg-rose-100 transition-colors"
+                                >
+                                    Proceed without image
                                 </button>
                             </div>
-                        </form>
-                    </div>
+                        </div>
+                    )}
+
+                    {/* No camera configured warning */}
+                    {laneConfig && laneConfig.has_camera === false && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 flex items-center gap-2">
+                            <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <span className="text-xs text-amber-700 font-medium">No camera configured — check-in will proceed without image evidence</span>
+                        </div>
+                    )}
                 </div>
 
-                <div className="lg:col-span-1">
-                    <div className="bg-white shadow-md rounded-lg overflow-hidden h-full">
-                        <div className="bg-blue-600 text-white px-6 py-4">
-                            <h2 className="text-xl font-semibold">Instructions</h2>
+                {/* Right pane: Controls & Status */}
+                <div className="lg:col-span-5 space-y-6">
+                    <GateStatusPanel isOpen={kioskState === KIOSK_STATES.SUCCESS} />
+
+                    <ReaderPanel
+                        value={card_uid}
+                        onChange={handleCardChange}
+                        disabled={isScanning}
+                        onSubmit={handleScan}
+                    />
+
+                    <VehicleFormPanel
+                        value={vehicle_type}
+                        onChange={handleVehicleTypeChange}
+                        disabled={isScanning || !card_uid.trim()}
+                        onSubmit={handleSubmit}
+                        subscription={subscription}
+                        subscriptionLoading={subscriptionLoading}
+                        subscriptionError={subscriptionError}
+                    />
+
+                    {/* LPD notification */}
+                    {lpdNotification && (
+                        <div className={`rounded-lg border px-4 py-2.5 flex items-center gap-2 ${
+                            lpdNotification.type === "success"
+                                ? "border-emerald-200 bg-emerald-50"
+                                : "border-amber-200 bg-amber-50"
+                        }`}>
+                            <span className={`w-2 h-2 rounded-full ${
+                                lpdNotification.type === "success" ? "bg-emerald-500" : "bg-amber-500"
+                            }`} />
+                            <span className={`text-xs font-medium ${
+                                lpdNotification.type === "success" ? "text-emerald-700" : "text-amber-700"
+                            }`}>
+                                {lpdNotification.message}
+                            </span>
                         </div>
-                        <div className="p-6">
-                            <div className="space-y-4">
-                                <p className="text-gray-600">
-                                    Enter the vehicle license plate and select the appropriate vehicle type to check in
-                                    a vehicle.
-                                </p>
-                                <div className="border-t pt-4">
-                                    <h3 className="font-medium text-gray-700 mb-2">Guidelines:</h3>
-                                    <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                                        <li>Verify license plate matches the actual vehicle</li>
-                                        <li>Ensure correct vehicle type is selected</li>
-                                        <li>Print ticket for customer upon successful check-in</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    )}
+
+                    <ResultPanel
+                        stateLabel={getKioskStatusMessage(kioskState)}
+                        detail={resultDetail}
+                        sessionId={ticket?.session_id}
+                    />
                 </div>
             </div>
-
-            {ticket && (
-                <div className="mt-8 bg-white border border-green-200 rounded-lg overflow-hidden shadow-md">
-                    <div className="bg-green-600 text-white px-6 py-4 flex justify-between items-center">
-                        <div>
-                            <h3 className="text-xl font-semibold">Parking Ticket Generated</h3>
-                            <p className="text-green-100 text-sm">Ticket created successfully</p>
-                        </div>
-                        <button
-                            onClick={() => window.print()}
-                            className="flex items-center px-4 py-2 bg-white text-green-600 rounded-md hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-white"
-                        >
-                            <FaPrint className="mr-2" />
-                            Print
-                        </button>
-                    </div>
-
-                    <div className="p-6 no-print">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="flex items-start">
-                                <div className="bg-green-100 p-2 rounded-full mr-3">
-                                    <FaQrcode className="h-5 w-5 text-green-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-500">Ticket ID</p>
-                                    <p className="font-semibold">{ticket.session_id}</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-start">
-                                <div className="bg-green-100 p-2 rounded-full mr-3">
-                                    <FaCar className="h-5 w-5 text-green-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-500">License Plate</p>
-                                    <p className="font-semibold">{ticket.license_plate}</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-start">
-                                <div className="bg-green-100 p-2 rounded-full mr-3">
-                                    {ticket.vehicle_type === "car" ? (
-                                        <FaCar className="h-5 w-5 text-green-600" />
-                                    ) : (
-                                        <FaMotorcycle className="h-5 w-5 text-green-600" />
-                                    )}
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-500">Vehicle Type</p>
-                                    <p className="font-semibold capitalize">{ticket.vehicle_type}</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-start">
-                                <div className="bg-green-100 p-2 rounded-full mr-3">
-                                    <FaRegClock className="h-5 w-5 text-green-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-500">Check-in Time</p>
-                                    <p className="font-semibold">{formatDateTime(ticket.time_in)}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="mt-4 p-4 bg-green-50 rounded-md text-green-800 text-sm">
-                            <p>
-                                This ticket has been successfully created and the vehicle has been checked in. Please
-                                provide the printed ticket to the customer.
-                            </p>
-                        </div>
-                    </div>
-                    
-                    {/* Hidden printable ticket */}
-                    <PrintableTicket ticket={ticket} formatDateTime={formatDateTime} />
-                </div>
-            )}
-        </div>
+        </main>
     );
 }
