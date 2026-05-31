@@ -1,4 +1,4 @@
-export default function GateStatusPanel({ isOpen }) {
+export default function GateStatusPanel({ isOpen, onManualOpen }) {
     return (
         <section className={`rounded-xl border transition-all duration-300 p-5 shadow-sm ${
             isOpen 
@@ -34,6 +34,14 @@ export default function GateStatusPanel({ isOpen }) {
                         </div>
                     </div>
                 </div>
+
+                <button
+                    type="button"
+                    onClick={onManualOpen}
+                    className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-800 transition-all duration-200 cursor-pointer active:scale-[0.97] shadow-sm"
+                >
+                    Manual Open
+                </button>
             </div>
         </section>
     );

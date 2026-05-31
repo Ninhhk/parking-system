@@ -36,6 +36,7 @@ exports.getLaneConfig = async (req, res) => {
                 lane_direction: lane.lane_direction,
                 allowed_trigger_modules: lane.allowed_trigger_modules,
                 has_camera: cameraResult.rowCount > 0,
+                vehicle_type: lane.vehicle_type || null,
             },
         });
     } catch (error) {
