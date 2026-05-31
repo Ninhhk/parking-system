@@ -12,6 +12,7 @@ const {
 const checkoutService = require("../services/checkout.service");
 const { uploadCheckinImage, uploadCheckoutImage, isBase64Image } = require("../services/image.upload.helper");
 const { getPresignedUrl } = require("../services/minio.service");
+const parkingCardsRepo = require("../repositories/parkingCards.repo");
 
 // Vehicle Entry - Create a new parking session
 exports.checkInVehicle = async (req, res) => {
@@ -31,9 +32,11 @@ exports.checkInVehicle = async (req, res) => {
         const license_plate = sanitizePlate(raw_license_plate);
 
         const hasIdentity = !!(license_plate || card_uid || etag_epc);
+        const isCasual = metadata_in && metadata_in.entry_type === "casual";
 
         // Validate required fields
-        if (!vehicle_type || !hasIdentity) {
+        // Casual entries only require vehicle_type; identity is optional
+        if (!vehicle_type || (!isCasual && !hasIdentity)) {
             return res.status(422).json({
                 success: false,
                 message: "Missing required fields",
@@ -78,6 +81,23 @@ exports.checkInVehicle = async (req, res) => {
                 success: false,
                 message: "No parking lot found for the employee",
             });
+        }
+
+        // Validate pool card for issued-card casual entries
+        if (isCasual && card_uid) {
+            const poolCard = await parkingCardsRepo.getPoolCard(parkingLot.lot_id, card_uid);
+            if (!poolCard) {
+                return res.status(422).json({
+                    success: false,
+                    message: "Card not recognized",
+                });
+            }
+            if (poolCard.status === "lost") {
+                return res.status(409).json({
+                    success: false,
+                    message: "Card unavailable",
+                });
+            }
         }
 
         // Check if vehicle has a monthly subscription
@@ -558,6 +578,17 @@ exports.reportLostTicket = async (req, res) => {
     try {
         const report = await sessionsRepo.reportLostTicket({ session_id, guest_identification, guest_phone });
         await sessionsRepo.syncLostTicketStatus(session_id); // Ensure is_lost is updated immediately
+
+        // Mark pool card as lost if session was bound to one
+        try {
+            const session = await sessionsRepo.getSession(session_id);
+            if (session && session.card_uid) {
+                await parkingCardsRepo.markLost(session.lot_id, session.card_uid);
+            }
+        } catch (cardErr) {
+            console.error("Failed to mark pool card as lost:", cardErr);
+        }
+
         return res.status(201).json({
             success: true,
             data: report,

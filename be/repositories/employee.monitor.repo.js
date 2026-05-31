@@ -4,7 +4,7 @@ exports.getMyLot = async (user_id) => {
     const query = `
         SELECT 
             pl.lot_id, pl.lot_name, pl.car_capacity, pl.bike_capacity,
-            pl.current_car, pl.current_bike,
+            pl.current_car, pl.current_bike, pl.casual_entry_mode,
             u.username as manager_username
         FROM ParkingLots pl
         LEFT JOIN Users u ON pl.managed_by = u.user_id

@@ -1,0 +1,11 @@
+ ΓÜá Linting is disabled.
+   Γû▓ Next.js 15.3.1
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+uncaughtException [Error: EPERM: operation not permitted, open 'D:\Project 2_20242\Tun\parking-lot\fe\.next\trace'] {
+  errno: -4048,
+  code: 'EPERM',
+  syscall: 'open',
+  path: 'D:\\Project 2_20242\\Tun\\parking-lot\\fe\\.next\\trace'
+}
