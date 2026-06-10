@@ -14,6 +14,7 @@ import {
     HiQuestionMarkCircle,
     HiSpeakerphone,
     HiVideoCamera,
+    HiCreditCard,
 } from "react-icons/hi";
 import { HiCheckBadge, HiDocumentCurrencyDollar, HiPresentationChartLine, HiSpeakerXMark } from "react-icons/hi2";
 
@@ -49,6 +50,11 @@ const Sidebar = () => {
             name: "Parking Lots",
             href: "/admin/parking-lots",
             icon: <HiOfficeBuilding className="mr-3 h-6 w-6" />,
+        },
+        {
+            name: "Card Pool",
+            href: "/admin/parking-cards",
+            icon: <HiCreditCard className="mr-3 h-6 w-6" />,
         },
         {
             name: "Users",

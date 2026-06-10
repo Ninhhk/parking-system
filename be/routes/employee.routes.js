@@ -45,6 +45,7 @@ router.delete("/lost-tickets/:session_id", sessionsController.deleteLostTicket);
 // New entry/exit API endpoints
 router.post("/parking/entry", sessionsController.checkInVehicle);
 router.post("/parking/entry/rfid", sessionsController.checkInByRfid);
+router.get("/parking/exit/by-card/:card_uid", sessionsController.findActiveSessionByCard);
 router.get("/parking/exit/:session_id", sessionsController.initiateCheckout);
 router.post("/parking/exit/confirm", sessionsController.confirmCheckout);
 router.post("/parking/exit/:session_id/payment-intents", employeePaymentController.createIntent);

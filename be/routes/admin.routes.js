@@ -13,6 +13,7 @@ const adminNotiController = require("../controllers/admin.noti.controller");
 const adminLostTicketController = require("../controllers/admin.lostticket.controller");
 const adminAnalyticsController = require("../controllers/admin.analytics.controller");
 const adminCameraController = require("../controllers/admin.camera.controller");
+const adminParkingCardsController = require("../controllers/admin.parkingCards.controller");
 
 const { hasPermission } = require("../middlewares/auth.middleware");
 
@@ -87,5 +88,12 @@ router.put("/cameras/:camera_id", adminCameraController.updateCamera);
 router.delete("/cameras/:camera_id", adminCameraController.deleteCamera);
 router.post("/cameras/:camera_id/modules", adminCameraController.enableModule);
 router.delete("/cameras/:camera_id/modules/:module_type", adminCameraController.disableModule);
+
+// Card Pool Management
+router.get("/parking-cards", adminParkingCardsController.listCards);
+router.get("/parking-cards/inventory", adminParkingCardsController.getInventory);
+router.post("/parking-cards", adminParkingCardsController.createCard);
+router.patch("/parking-cards/:card_uid/status", adminParkingCardsController.setStatus);
+router.delete("/parking-cards/:card_uid", adminParkingCardsController.deleteCard);
 
 module.exports = router;

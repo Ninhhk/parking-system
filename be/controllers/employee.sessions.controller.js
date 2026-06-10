@@ -13,6 +13,7 @@ const checkoutService = require("../services/checkout.service");
 const { uploadCheckinImage, uploadCheckoutImage, isBase64Image } = require("../services/image.upload.helper");
 const { getPresignedUrl } = require("../services/minio.service");
 const parkingCardsRepo = require("../repositories/parkingCards.repo");
+const { evaluateIssuedCardEntry } = require("../services/issuedCardEntry");
 
 // Vehicle Entry - Create a new parking session
 exports.checkInVehicle = async (req, res) => {
@@ -85,17 +86,12 @@ exports.checkInVehicle = async (req, res) => {
 
         // Validate pool card for issued-card casual entries
         if (isCasual && card_uid) {
-            const poolCard = await parkingCardsRepo.getPoolCard(parkingLot.lot_id, card_uid);
-            if (!poolCard) {
-                return res.status(422).json({
+            const poolCard = await parkingCardsRepo.getPoolCard(card_uid);
+            const decision = evaluateIssuedCardEntry(poolCard, parkingLot.lot_id);
+            if (!decision.accept) {
+                return res.status(decision.status).json({
                     success: false,
-                    message: "Card not recognized",
-                });
-            }
-            if (poolCard.status === "lost") {
-                return res.status(409).json({
-                    success: false,
-                    message: "Card unavailable",
+                    message: decision.message,
                 });
             }
         }
@@ -428,6 +424,51 @@ exports.initiateCheckout = async (req, res) => {
 };
 
 
+// Vehicle Exit - Card lookup: resolve the active session bound to a tapped card.
+// Scoped to the employee's lot so an employee can only check out their own lot's
+// vehicles. Returns just the session_id; the client then loads the full checkout
+// detail via the existing initiateCheckout endpoint.
+exports.findActiveSessionByCard = async (req, res) => {
+    try {
+        const card_uid = req.params.card_uid;
+
+        if (!card_uid || !card_uid.trim()) {
+            return res.status(422).json({
+                success: false,
+                message: "Card UID is required",
+            });
+        }
+
+        const userId = req.session.user.user_id;
+        const parkingLot = await lotsRepo.getParkingLotByManager(userId);
+        if (!parkingLot) {
+            return res.status(404).json({
+                success: false,
+                message: "You are not assigned to manage any parking lot",
+            });
+        }
+
+        const session = await sessionsRepo.findActiveByCardUid(card_uid.trim());
+        if (!session || session.lot_id !== parkingLot.lot_id) {
+            return res.status(404).json({
+                success: false,
+                message: "No active session found for this card",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: { session_id: session.session_id },
+        });
+    } catch (error) {
+        console.error("Find active session by card error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    }
+};
+
 // Vehicle Exit - Stage 2: Confirm payment and complete checkout
 exports.confirmCheckout = async (req, res) => {
     try {
@@ -497,6 +538,16 @@ exports.confirmCheckout = async (req, res) => {
             paymentMethod: payment_method,
         });
 
+        // Determine time_out: if this request finalized, use now;
+        // otherwise re-read session to get actual time_out set by the winning request.
+        let timeOut;
+        if (cashResult.finalized) {
+            timeOut = new Date().toISOString();
+        } else {
+            const freshSession = await sessionsRepo.getSession(session_id);
+            timeOut = freshSession ? freshSession.time_out : null;
+        }
+
         res.status(200).json({
             success: true,
             message: "Checkout completed successfully",
@@ -505,10 +556,11 @@ exports.confirmCheckout = async (req, res) => {
                 amount: feeResult.totalAmount,
                 method: payment_method,
                 paid_at: new Date().toISOString(),
+                already_finalized: !cashResult.finalized,
             },
             session: {
                 session_id: Number(session_id),
-                time_out: cashResult.finalized ? new Date().toISOString() : session.time_out,
+                time_out: timeOut,
             },
         });
 
@@ -525,6 +577,15 @@ exports.confirmCheckout = async (req, res) => {
         }
     } catch (error) {
         console.error("Confirm checkout error:", error);
+
+        // DB pool exhausted — connectionTimeoutMillis fires before 5s
+        if (error.message && error.message.toLowerCase().includes("timeout")) {
+            return res.status(503).json({
+                success: false,
+                message: "Hệ thống đang bận, vui lòng thử lại sau",
+            });
+        }
+
         res.status(500).json({
             success: false,
             message: "Internal server error",
@@ -579,14 +640,19 @@ exports.reportLostTicket = async (req, res) => {
         const report = await sessionsRepo.reportLostTicket({ session_id, guest_identification, guest_phone });
         await sessionsRepo.syncLostTicketStatus(session_id); // Ensure is_lost is updated immediately
 
-        // Mark pool card as lost if session was bound to one
+        // Mark pool card as lost if session was bound to one (best-effort).
+        // On failure, log structured context and still return 201 — the lost-ticket
+        // report itself already succeeded; check-in stays fail-closed via the
+        // active-session index + issued-card decision (Req 9.4).
+        let card_uid = null;
         try {
             const session = await sessionsRepo.getSession(session_id);
-            if (session && session.card_uid) {
-                await parkingCardsRepo.markLost(session.lot_id, session.card_uid);
+            card_uid = session && session.card_uid ? session.card_uid : null;
+            if (card_uid) {
+                await parkingCardsRepo.markLost(card_uid);
             }
         } catch (cardErr) {
-            console.error("Failed to mark pool card as lost:", cardErr);
+            console.error(JSON.stringify({ event: "pool_card_mark_lost_failed", card_uid, session_id }));
         }
 
         return res.status(201).json({

@@ -38,9 +38,14 @@ export async function checkInByRfid(sessionData) {
     return res.data;
 }
 
+// Resolve the active session bound to a tapped card for checkout (Exit by card)
+export async function findActiveSessionByCard(cardUid) {
+    const res = await api.get(`/employee/parking/exit/by-card/${cardUid}`);
+    return res.data.data;
+}
+
 // Initiate check-out process (Exit Stage 1) - Just gets preliminary information, no DB updates
-export async function initiateCheckout(sessionId) {
-    const res = await api.get(`/employee/parking/exit/${sessionId}`);
+export async function initiateCheckout(sessionId) {    const res = await api.get(`/employee/parking/exit/${sessionId}`);
     return res;
 }
 

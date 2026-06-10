@@ -29,6 +29,31 @@ exports.getLaneConfig = async (req, res) => {
             [lane_id, lane.lane_direction]
         );
 
+        // LPD is "active" for this lane only when the lane policy permits it AND
+        // an active plate camera on the lane/direction has the LPD module enabled
+        // in admin (camera_module_assignments). This keeps the kiosk badge in sync
+        // with the admin Camera Management config instead of the static lane policy.
+        const laneAllowsLpd = Array.isArray(lane.allowed_trigger_modules) &&
+            lane.allowed_trigger_modules.some((m) => String(m).toUpperCase() === "LPD");
+
+        let lpdEnabled = false;
+        if (laneAllowsLpd) {
+            const lpdCameraResult = await pool.query(
+                `SELECT 1
+                   FROM cameras c
+                   JOIN camera_module_assignments m ON m.camera_id = c.camera_id
+                  WHERE c.lane_id = $1
+                    AND c.direction = $2
+                    AND c.purpose = 'plate'
+                    AND c.is_active = true
+                    AND m.module_type = 'LPD'
+                    AND m.is_enabled = true
+                  LIMIT 1`,
+                [lane_id, lane.lane_direction]
+            );
+            lpdEnabled = lpdCameraResult.rowCount > 0;
+        }
+
         return res.status(200).json({
             success: true,
             data: {
@@ -36,6 +61,7 @@ exports.getLaneConfig = async (req, res) => {
                 lane_direction: lane.lane_direction,
                 allowed_trigger_modules: lane.allowed_trigger_modules,
                 has_camera: cameraResult.rowCount > 0,
+                lpd_enabled: lpdEnabled,
                 vehicle_type: lane.vehicle_type || null,
             },
         });

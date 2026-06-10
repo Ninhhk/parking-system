@@ -10,7 +10,6 @@ import {
     regeneratePaymentIntent,
     fetchPaymentStatus,
 } from "@/app/api/employee.client";
-import PageHeader from "@/app/components/common/PageHeader";
 import { useToast } from "@/app/components/providers/ToastProvider";
 import {
     FaRegCreditCard,
@@ -27,6 +26,8 @@ import {
 import PayOSEmbed from "@/app/components/payment/PayOSEmbed";
 import SessionImage from "@/app/components/common/SessionImage";
 import KioskCameraPanel from "@/app/employee/checkin/components/KioskCameraPanel";
+import GateStatusPanel from "@/app/employee/checkin/components/GateStatusPanel";
+import { detectLicensePlate } from "@/app/api/employee.lpd.client";
 
 const CARD_STATUS_LABELS = {
     PENDING: "Pending payment",
@@ -36,6 +37,9 @@ const CARD_STATUS_LABELS = {
     NOT_FOUND: "No active payment intent",
     REQUIRES_PAYMENT_METHOD: "Requires payment method",
 };
+
+const GATE_AUTO_CLOSE_MS = 4000;
+const CASH_CONFIRM_TIMEOUT_MS = 10000;
 
 const makeIdempotencyKey = (prefix, sessionId) => `${prefix}-${sessionId}-${Date.now()}`;
 
@@ -94,12 +98,77 @@ export default function PaymentDetailsPage() {
     const isMountedRef = useRef(true);
     const checkoutCameraRef = useRef(null);
 
+    // Gate state machine (matches kiosk check-in pattern)
+    const [gateState, setGateState] = useState("shut");
+    const gateTimerRef = useRef(null);
+    const gateContextRef = useRef(null); // "checkout" | "manual" | null
+
+    // View state machine for checkout flow
+    const [viewState, setViewState] = useState("input"); // "input" | "processing" | "success" | "payment_failed"
+    const [successDetail, setSuccessDetail] = useState(null);
+
+    // Exit-image plate detection for đối chiếu (visual + plate match against check-in)
+    const [exitPlate, setExitPlate] = useState(null);
+    const [detectingExitPlate, setDetectingExitPlate] = useState(false);
+
     useEffect(() => {
         isMountedRef.current = true;
         return () => {
             isMountedRef.current = false;
         };
     }, []);
+
+    // Cleanup gate timer on unmount (matches kiosk pattern)
+    useEffect(() => {
+        return () => {
+            if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
+        };
+    }, []);
+
+    // Guard ref to prevent double navigation in closeGate
+    const closeGateNavigatingRef = useRef(false);
+
+    // Gate control functions (Requirements 3.2, 3.4, 3.10)
+    function openGate(context, detail) {
+        setGateState("open");
+        gateContextRef.current = context;
+        if (detail) {
+            setViewState("success");
+            setSuccessDetail(detail);
+        }
+        if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
+        gateTimerRef.current = setTimeout(closeGate, GATE_AUTO_CLOSE_MS);
+    }
+
+    function closeGate() {
+        if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
+        gateTimerRef.current = null;
+        setGateState("shut");
+
+        if (gateContextRef.current === "checkout") {
+            // Navigate exactly once back to checkout input screen
+            if (!closeGateNavigatingRef.current) {
+                closeGateNavigatingRef.current = true;
+                router.replace("/employee/checkout");
+            }
+        } else {
+            // Manual context: stay on page, reset view
+            setViewState("input");
+        }
+        gateContextRef.current = null;
+    }
+
+    // Manual Gate Open: open gate without finalize/Success_View (Req 3.8, 3.9)
+    function handleManualGateOpen() {
+        if (viewState !== "success") {
+            openGate("manual", null);
+        }
+    }
+
+    // Manual Gate Close: cancel timer, close gate (Req 3.5)
+    function handleManualGateClose() {
+        closeGate();
+    }
 
     const isLostTicketApplied = Boolean(checkout.session?.is_lost);
 
@@ -150,43 +219,63 @@ export default function PaymentDetailsPage() {
         return () => clearInterval(timer);
     }, [regenerateCooldown]);
 
-    const handleConfirmPayment = async () => {
+    // Cash Checkout Action — single button: finalize + open gate + Success_View
+    // (Req 1.2, 1.3, 1.4, 1.5, 1.6, 1.7)
+    const handleCashCheckout = async () => {
         if (!checkout.session) {
             toast.error("No checkout session to confirm");
             return;
         }
-        if (paymentMethod === "CARD") {
-            toast.error("CARD payment is completed automatically after webhook confirmation");
-            return;
+
+        // Req 1.5: disable button + processing indicator
+        setViewState("processing");
+
+        // Req 1.2: capture exit image with 3s timeout; empty string if fails
+        let imageOut = "";
+        try {
+            imageOut = await Promise.race([
+                Promise.resolve(checkoutCameraRef.current?.capture() || ""),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Camera timeout")), 3000)),
+            ]);
+        } catch {
+            imageOut = "";
         }
 
-        // Auto-capture exit image
-        const imageOutBase64 = checkoutCameraRef.current?.capture() || undefined;
-
-        setLoading(true);
+        // Req 1.3, 1.4: Promise.race with 10s timeout + cancelled flag for late responses
+        let cancelled = false;
         try {
-            const result = await confirmCheckout(sessionid, paymentMethod, imageOutBase64);
-            setCheckout((prev) => ({
-                ...prev,
-                amount: result.amount,
-                hours: result.hours,
-                serviceFee: result.serviceFee,
-                penaltyFee: result.penaltyFee,
-            }));
-            toast.success("Payment confirmed and vehicle checked out");
-            // Redirect to success page with relevant info
-            const params = new URLSearchParams({
+            const result = await Promise.race([
+                confirmCheckout(sessionid, "CASH", imageOut),
+                new Promise((_, reject) =>
+                    setTimeout(() => {
+                        cancelled = true;
+                        reject(new Error("Request timed out. Please try again."));
+                    }, CASH_CONFIRM_TIMEOUT_MS)
+                ),
+            ]);
+
+            // Req 1.4: if timeout already fired, ignore late success
+            if (cancelled) return;
+
+            // Req 1.3: success within 10s → open gate + Success_View
+            const detail = {
                 license_plate: checkout.session.license_plate,
-                duration_hours: (liveHours ?? checkout.hours).toString(),
-                amount: (result.amount ?? checkout.amount).toString(),
-                is_monthly: checkout.session.is_monthly ? "true" : "false",
-                payment_method: paymentMethod,
-            });
-            router.replace(`/employee/checkout/success?${params.toString()}`);
+                duration_hours: liveHours ?? checkout.hours,
+                amount: result.amount ?? checkout.amount,
+                is_monthly: checkout.session.is_monthly,
+                payment_method: "CASH",
+            };
+            openGate("checkout", detail);
+
+            // Req 1.6: keep button disabled (viewState stays "success", not reset to "input")
         } catch (err) {
-            toast.error(err.response?.data?.message || "Failed to confirm payment");
-        } finally {
-            setLoading(false);
+            // Req 1.4: late response after timeout already set cancelled=true
+            if (cancelled) return;
+
+            // Req 1.7: show error toast, keep gate closed, re-enable button for retry
+            const message = err.response?.data?.message || err.message || "Failed to confirm payment";
+            toast.error(message);
+            setViewState("input");
         }
     };
 
@@ -197,6 +286,26 @@ export default function PaymentDetailsPage() {
         if (showLostTicketForm) {
             setGuestIdImage(null);
             setGuestPhone("");
+        }
+    };
+
+    // Capture the live exit frame and run LPD so the operator can quickly đối chiếu
+    // the detected exit plate against the session's stored check-in plate.
+    const handleDetectExitPlate = async () => {
+        const imageBase64 = checkoutCameraRef.current?.capture();
+        if (!imageBase64) {
+            toast.error("Could not capture exit image from camera");
+            return;
+        }
+        setDetectingExitPlate(true);
+        setExitPlate(null);
+        try {
+            const result = await detectLicensePlate(imageBase64);
+            setExitPlate(result.normalized_plate);
+        } catch (err) {
+            toast.error(err.message || "Plate detection failed");
+        } finally {
+            setDetectingExitPlate(false);
         }
     };
 
@@ -312,21 +421,24 @@ export default function PaymentDetailsPage() {
                 }
 
                 if (nextStatus === "PAID") {
+                    // Req 2.1, 2.2, 2.3: stop polling, open gate + Success_View
                     clearInterval(timer);
                     toast.success("Card payment confirmed");
-                    const params = new URLSearchParams({
+                    const detail = {
                         license_plate: checkout.session.license_plate,
-                        duration_hours: (liveHours ?? checkout.hours).toString(),
-                        amount: getTotalAmount().toString(),
-                        is_monthly: checkout.session.is_monthly ? "true" : "false",
+                        duration_hours: liveHours ?? checkout.hours,
+                        amount: getTotalAmount(),
+                        is_monthly: checkout.session.is_monthly,
                         payment_method: "CARD",
-                    });
-                    router.replace(`/employee/checkout/success?${params.toString()}`);
+                    };
+                    openGate("checkout", detail);
                 } else if (nextStatus === "FAILED" || nextStatus === "EXPIRED") {
+                    // Req 2.5: stop polling, show payment_failed, keep gate closed, keep session open
                     clearInterval(timer);
+                    setViewState("payment_failed");
                 }
             } catch (err) {
-                // keep polling silently
+                // Req 2.6: network/server error → keep gate closed, don't stop interval, retry next cycle
             }
         }, 3000);
 
@@ -406,233 +518,384 @@ export default function PaymentDetailsPage() {
     if (!checkout.session) return null;
 
     return (
-        <div className="container mx-auto p-6">
-            <PageHeader title="Payment Details" />
-            <div className="flex justify-end mb-4">
-                <button
-                    className={`flex items-center px-4 py-2 rounded-md text-sm font-medium border transition ${
-                        showLostTicketForm
-                            ? "bg-yellow-100 border-yellow-500 text-yellow-800"
-                            : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                    }`}
-                    onClick={handleLostTicketToggle}
-                >
-                    <FaExclamationTriangle className="mr-2" />
-                    {showLostTicketForm ? "Cancel Lost Ticket Report" : "Report Lost Ticket"}
-                </button>
-                {checkout.session?.is_lost && (
-                    <button
-                        onClick={handleRemoveLostTicket}
-                        className="ml-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-                        disabled={loading}
-                    >
-                        Remove Lost Ticket
-                    </button>
-                )}
-            </div>
-            {showLostTicketForm && (
-                <form
-                    className="bg-yellow-50 border border-yellow-400 rounded-lg p-4 mb-6"
-                    onSubmit={handleLostTicketSubmit}
-                >
-                    <div className="mb-2 flex items-center text-yellow-800">
-                        <FaIdCard className="mr-2" />
-                        <span className="font-semibold">Lost Ticket Report</span>
+        <main className="mx-auto max-w-6xl p-6 bg-white text-slate-800 rounded-2xl border border-gray-200 shadow-sm my-4">
+            {/* Header */}
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-150 pb-4 mb-6 gap-3">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                        <h1 className="text-xl font-bold uppercase tracking-wider text-slate-900 font-mono">
+                            Checkout Terminal
+                        </h1>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Guest ID Card Photo</label>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleIdImageChange}
-                                className="block w-full text-sm text-gray-700"
-                            />
-                            {guestIdImage && (
-                                <span className="text-xs text-gray-500 mt-1 block">{guestIdImage.name}</span>
-                            )}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Guest Phone</label>
-                            <input
-                                type="tel"
-                                value={guestPhone}
-                                onChange={handleGuestPhoneChange}
-                                className="block w-full border border-gray-300 rounded-md p-2 text-gray-800 text-sm"
-                                placeholder="Enter guest phone number"
-                            />
-                        </div>
-                    </div>
-                    <div className="flex justify-end mt-4">
-                        <button
-                            type="submit"
-                            disabled={reportingLost}
-                            className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
-                        >
-                            {reportingLost ? "Reporting..." : "Submit Lost Ticket Report"}
-                        </button>
-                    </div>
-                </form>
-            )}
-            <div className="bg-white shadow-md rounded-lg overflow-hidden mt-6">
-                <div className="bg-blue-600 text-white px-6 py-4">
-                    <h2 className="text-xl font-semibold flex items-center">
-                        <FaRegCreditCard className="mr-2" />
-                        Payment Details
-                    </h2>
-                    <p className="text-blue-100 text-sm">Confirm payment to complete checkout</p>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">UNIFIED GATEWAY TERMINAL</p>
                 </div>
-                <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        <div className="bg-gray-50 rounded-lg p-4">
-                            <div className="mb-4">
-                                <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                                    <FaCar className="mr-2 text-blue-500" />
-                                    Vehicle Information
-                                </h3>
-                            </div>
-                            <div className="space-y-3">
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Ticket ID:</span>
-                                    <span className="text-sm font-medium">{checkout.session.session_id}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">License Plate:</span>
-                                    <span className="text-sm font-medium">{checkout.session.license_plate}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Vehicle Type:</span>
-                                    <span className="text-sm font-medium capitalize">
-                                        {checkout.session.vehicle_type}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Monthly Pass:</span>
-                                    <span
-                                        className={`text-sm font-medium ${
-                                            checkout.session.is_monthly ? "text-green-600" : ""
-                                        }`}
-                                    >
-                                        {checkout.session.is_monthly ? "Yes" : "No"}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Lost Ticket:</span>
-                                    <span
-                                        className={`text-sm font-medium ${
-                                            checkout.session.is_lost ? "text-red-600" : ""
-                                        }`}
-                                    >
-                                        {isLostTicketApplied ? "Yes (penalty applied)" : "No"}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-4">
-                            <div className="mb-4">
-                                <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                                    <FaRegClock className="mr-2 text-blue-500" />
-                                    Time & Billing
-                                </h3>
-                            </div>
-                            <div className="space-y-3">
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Check-In Time:</span>
-                                    <span className="text-sm font-medium">
-                                        {formatDateTime(checkout.session.time_in)}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Current Time:</span>
-                                    <span className="text-sm font-medium">{formatDateTime(currentTime)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Duration:</span>
-                                    <span className="text-sm font-medium">{liveHours ?? checkout.hours} hours</span>
-                                </div>
-                                <div className="flex justify-between font-medium">
-                                    <span className="text-sm text-gray-700">Payment Amount:</span>
-                                    <span className="text-lg text-green-600 font-bold">
-                                        {formatCurrency(getTotalAmount())}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Service Fee:</span>
-                                    <span className="text-sm font-medium">{formatCurrency(checkout.serviceFee)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Penalty Fee:</span>
-                                    <span className="text-sm font-medium">{formatCurrency(checkout.penaltyFee)}</span>
-                                </div>
-                            </div>
-                        </div>
+
+                <div className="flex items-center gap-4 text-xs font-mono">
+                    <div className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded flex items-center gap-2 text-slate-600 shadow-xs">
+                        <span className="text-slate-400 uppercase tracking-widest text-[9px]">CLOCK:</span>
+                        <span className="font-bold text-indigo-600 tracking-widest">
+                            {currentTime.toLocaleTimeString()}
+                        </span>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                        <div className="mb-4">
-                            <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                                <FaImage className="mr-2 text-blue-500" />
-                                Session Images
-                            </h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <p className="text-sm text-gray-500 mb-2">Check-in Image</p>
-                                <SessionImage
-                                    objectKey={checkout.session.image_in_url}
-                                    type="in"
-                                    sessionId={sessionid}
-                                />
+                </div>
+            </header>
+
+            {/* Main grid layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left pane: Camera, plates, images */}
+                <div className="lg:col-span-7 space-y-6 flex flex-col">
+                    {/* Exit Camera */}
+                    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse" />
+                                <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-800 font-mono">
+                                    Exit Camera Feed
+                                </h2>
                             </div>
-                            <div>
-                                <p className="text-sm text-gray-500 mb-2">Check-out Image</p>
-                                <SessionImage
-                                    objectKey={checkout.session.image_out_url}
-                                    type="out"
-                                    sessionId={sessionid}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                        <div className="mb-4">
-                            <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                                <FaImage className="mr-2 text-blue-500" />
-                                Exit Camera
-                            </h3>
-                            <p className="text-sm text-gray-500 mt-1">Image will be captured automatically on checkout confirmation</p>
+                            <span className="text-[10px] font-bold font-mono tracking-widest px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase">
+                                LIVE
+                            </span>
                         </div>
                         <KioskCameraPanel ref={checkoutCameraRef} />
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                        <div className="mb-4">
-                            <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                                <FaMoneyBillWave className="mr-2 text-blue-500" />
-                                Payment Method
-                            </h3>
+                        
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2 border-t border-gray-100">
+                            <p className="text-xs text-slate-500">Image will be captured automatically on checkout confirmation.</p>
+                            <button
+                                type="button"
+                                onClick={handleDetectExitPlate}
+                                disabled={detectingExitPlate}
+                                className="w-full sm:w-auto px-3.5 py-2 cursor-pointer bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 active:scale-[0.97] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm font-mono uppercase tracking-wider"
+                            >
+                                {detectingExitPlate ? (
+                                    <>
+                                        <FaSync className="animate-spin h-3.5 w-3.5" />
+                                        Detecting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <FaSync className="h-3.5 w-3.5" />
+                                        Detect Plate
+                                    </>
+                                )}
+                            </button>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                    </div>
+
+                    {/* Plate comparison details */}
+                    {exitPlate && (() => {
+                        const checkinPlate = checkout.session.license_plate || "";
+                        const normalize = (p) => p.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+                        const isMatch = normalize(exitPlate) === normalize(checkinPlate);
+                        return (
                             <div
-                                className={`border rounded-lg p-4 flex items-center cursor-pointer ${
-                                    paymentMethod === "CASH" ? "bg-blue-50 border-blue-500" : "hover:bg-gray-100"
+                                className={`rounded-xl border p-5 shadow-sm transition-all duration-300 ${
+                                    isMatch 
+                                        ? "bg-emerald-50 border-emerald-200 text-emerald-850 shadow-[0_2px_8px_rgba(16,185,129,0.05)]" 
+                                        : "bg-rose-50 border-rose-200 text-rose-850 shadow-[0_2px_8px_rgba(244,63,94,0.05)]"
+                                }`}
+                            >
+                                <div className="flex items-center justify-between border-b border-gray-150 pb-3 mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <svg className={`w-5 h-5 ${isMatch ? "text-emerald-500" : "text-rose-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-800">License Plate Comparison</h2>
+                                    </div>
+                                    <span className={`text-[10px] font-bold font-mono tracking-widest px-2 py-0.5 rounded border uppercase ${
+                                        isMatch ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-rose-100 text-rose-700 border-rose-200"
+                                    }`}>
+                                        {isMatch ? "MATCH" : "MISMATCH"}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-xs font-mono">
+                                    <div className="bg-white/80 p-3 rounded-lg border border-gray-200/50">
+                                        <span className="text-slate-500 uppercase tracking-widest text-[9px] block mb-1">Check-in Plate</span>
+                                        <span className="text-base font-bold text-slate-800">{checkinPlate || "N/A"}</span>
+                                    </div>
+                                    <div className="bg-white/80 p-3 rounded-lg border border-gray-200/50">
+                                        <span className="text-slate-500 uppercase tracking-widest text-[9px] block mb-1">Detected Exit Plate</span>
+                                        <span className="text-base font-bold text-slate-800">{exitPlate}</span>
+                                    </div>
+                                </div>
+                                <p className={`mt-3 text-xs font-semibold ${isMatch ? "text-emerald-750" : "text-rose-750"}`}>
+                                    {isMatch ? "✓ Plates match. Ready for checkout." : "✗ Plates do not match — please verify vehicle visually before confirming."}
+                                </p>
+                            </div>
+                        );
+                    })()}
+
+                    {/* Session Images comparison (Visual Đối chiếu) */}
+                    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+                        <div className="flex items-center gap-2">
+                            <FaImage className="text-indigo-600" />
+                            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-800 font-mono">
+                                Visual Comparison Evidence
+                            </h2>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px] font-mono block">Check-in Image</span>
+                                <div className="rounded-lg overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center p-2 min-h-[160px]">
+                                    <SessionImage
+                                        objectKey={checkout.session.image_in_url}
+                                        type="in"
+                                        sessionId={sessionid}
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px] font-mono block">Check-out Image</span>
+                                <div className="rounded-lg overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center p-2 min-h-[160px]">
+                                    <SessionImage
+                                        objectKey={checkout.session.image_out_url}
+                                        type="out"
+                                        sessionId={sessionid}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right Column (5/12 width) - Sidebar */}
+                <div className="lg:col-span-5 space-y-6">
+                    {/* Gate Status Panel (Req 3.7) */}
+                    <GateStatusPanel
+                        isOpen={gateState === "open"}
+                        onManualOpen={handleManualGateOpen}
+                        onManualClose={handleManualGateClose}
+                    />
+
+                    {/* Inline Success_View (Req 3.3, 3.6) */}
+                    {viewState === "success" && successDetail && (
+                        <div className="bg-green-50 border border-green-200 rounded-xl p-5 shadow-sm" data-testid="success-view">
+                            <div className="flex items-center justify-center mb-4">
+                                <div className="bg-green-100 rounded-full p-3">
+                                    <FaCheckCircle className="h-8 w-8 text-green-600" />
+                                </div>
+                            </div>
+                            <h3 className="text-lg font-semibold text-center text-green-800 mb-2">Payment Completed</h3>
+                            <p className="text-center text-green-700 mb-5 text-sm">
+                                The vehicle has been successfully checked out from the parking lot.
+                            </p>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-4 max-w-lg mx-auto text-sm">
+                                <div>
+                                    <p className="text-[10px] font-bold font-mono uppercase tracking-wider text-slate-500 mb-0.5">License Plate</p>
+                                    <p className="font-semibold text-slate-800">{successDetail.license_plate}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold font-mono uppercase tracking-wider text-slate-500 mb-0.5">Duration</p>
+                                    <p className="font-semibold text-slate-800">{successDetail.duration_hours} hours</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold font-mono uppercase tracking-wider text-slate-500 mb-0.5">Payment Amount</p>
+                                    <p className="font-semibold text-slate-800">
+                                        {formatCurrency(successDetail.amount)}
+                                        {successDetail.is_monthly && " (Monthly Pass)"}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold font-mono uppercase tracking-wider text-slate-500 mb-0.5">Payment Method</p>
+                                    <p className="font-semibold text-slate-800 flex items-center">
+                                        {successDetail.payment_method === "CASH" ? (
+                                            <>
+                                                <FaMoneyBillWave className="mr-1.5 text-green-600" />
+                                                Cash
+                                            </>
+                                        ) : (
+                                            <>
+                                                <FaCreditCard className="mr-1.5 text-green-600" />
+                                                Card
+                                            </>
+                                        )}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Lost Ticket Action Banner */}
+                    <div className="flex items-center justify-between gap-3 p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                        <div className="flex items-center gap-2.5">
+                            <FaExclamationTriangle className={`w-5 h-5 shrink-0 ${checkout.session?.is_lost ? 'text-red-500' : 'text-amber-500 animate-pulse'}`} />
+                            <div>
+                                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700 font-mono">Lost Ticket Status</h3>
+                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                    {checkout.session?.is_lost ? "Lost ticket reported (penalty applied)" : "Report lost ticket if card is missing"}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                            {checkout.session?.is_lost ? (
+                                <button
+                                    onClick={handleRemoveLostTicket}
+                                    className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-all cursor-pointer active:scale-[0.97] font-mono"
+                                    disabled={loading}
+                                >
+                                    Remove Penalty
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleLostTicketToggle}
+                                    className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg border transition-all cursor-pointer active:scale-[0.97] font-mono ${
+                                        showLostTicketForm
+                                            ? "bg-amber-100 border-amber-400 text-amber-800"
+                                            : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                                    }`}
+                                >
+                                    {showLostTicketForm ? "Cancel" : "Report"}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Lost Ticket Form */}
+                    {showLostTicketForm && (
+                        <form
+                            className="bg-amber-50/50 border border-amber-200 rounded-xl p-5 shadow-sm space-y-4"
+                            onSubmit={handleLostTicketSubmit}
+                        >
+                            <div className="flex items-center gap-2 text-amber-800 pb-2 border-b border-amber-150">
+                                <FaIdCard className="text-amber-600" />
+                                <span className="font-semibold text-xs uppercase tracking-wider font-mono">Lost Ticket Details</span>
+                            </div>
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-[10px] font-bold font-mono uppercase tracking-wider text-slate-500 mb-1">Guest ID Card Photo</label>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleIdImageChange}
+                                        className="block w-full text-xs text-slate-650 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 file:cursor-pointer"
+                                    />
+                                    {guestIdImage && (
+                                        <span className="text-[10px] text-slate-400 font-mono mt-1 block">{guestIdImage.name}</span>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold font-mono uppercase tracking-wider text-slate-500 mb-1">Guest Phone</label>
+                                    <input
+                                        type="tel"
+                                        value={guestPhone}
+                                        onChange={handleGuestPhoneChange}
+                                        className="block w-full border border-gray-200 rounded-lg p-2.5 text-slate-800 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white"
+                                        placeholder="Enter guest phone number"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    type="submit"
+                                    disabled={reportingLost}
+                                    className="px-4 py-2 cursor-pointer bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold shadow-xs active:scale-[0.98] transition-all disabled:opacity-50 font-mono uppercase tracking-wider"
+                                >
+                                    {reportingLost ? "Reporting..." : "Apply Penalty"}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                    {/* Session Summary Card */}
+                    <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm text-gray-600">
+                        <div className="flex items-center gap-2 border-b border-gray-150 pb-3 mb-3">
+                            <FaCar className="text-indigo-600" />
+                            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-800">Session Information</h2>
+                        </div>
+                        <div className="bg-gray-50/80 rounded-lg p-4 font-mono text-xs border border-gray-200/80 space-y-2 relative shadow-inner">
+                            <div className="flex justify-between items-center gap-4">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px]">Ticket ID:</span>
+                                <span className="font-bold text-slate-800">{checkout.session.session_id}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-4 border-t border-gray-200/60 pt-2">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px]">License Plate:</span>
+                                <span className="font-bold text-slate-800">{checkout.session.license_plate || "N/A"}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-4 border-t border-gray-200/60 pt-2">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px]">Vehicle Type:</span>
+                                <span className="font-bold text-slate-800 capitalize">{checkout.session.vehicle_type}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-4 border-t border-gray-200/60 pt-2">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px]">Monthly Pass:</span>
+                                <span className={`font-bold ${checkout.session.is_monthly ? 'text-emerald-600' : 'text-slate-650'}`}>
+                                    {checkout.session.is_monthly ? "YES" : "NO"}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center gap-4 border-t border-gray-200/60 pt-2">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px]">Lost Ticket Penalty:</span>
+                                <span className={`font-bold ${isLostTicketApplied ? 'text-rose-600' : 'text-slate-650'}`}>
+                                    {isLostTicketApplied ? "YES" : "NO"}
+                                </span>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Time & Billing Card */}
+                    <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm text-gray-600">
+                        <div className="flex items-center gap-2 border-b border-gray-150 pb-3 mb-3">
+                            <FaRegClock className="text-indigo-600" />
+                            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-800">Time & Billing</h2>
+                        </div>
+                        <div className="bg-gray-50/80 rounded-lg p-4 font-mono text-xs border border-gray-200/80 space-y-2 relative shadow-inner mb-4">
+                            <div className="flex justify-between items-center gap-4">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px]">Check-In Time:</span>
+                                <span className="font-medium text-slate-850">{formatDateTime(checkout.session.time_in)}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-4 border-t border-gray-200/60 pt-2">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px]">Current Time:</span>
+                                <span className="font-medium text-slate-850">{formatDateTime(currentTime)}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-4 border-t border-gray-200/60 pt-2">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px]">Duration:</span>
+                                <span className="font-bold text-slate-850">{liveHours ?? checkout.hours} hours</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-4 border-t border-gray-200/60 pt-2">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px]">Service Fee:</span>
+                                <span className="font-medium text-slate-850">{formatCurrency(checkout.serviceFee)}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-4 border-t border-gray-200/60 pt-2">
+                                <span className="text-slate-500 uppercase tracking-widest text-[9px]">Penalty Fee:</span>
+                                <span className="font-medium text-rose-600">{formatCurrency(checkout.penaltyFee)}</span>
+                            </div>
+                        </div>
+
+                        {/* Grand Total Highlight */}
+                        <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 flex items-center justify-between shadow-xs">
+                            <div>
+                                <span className="text-slate-500 font-mono uppercase tracking-widest text-[9px] block">Grand Total</span>
+                                <span className="text-2xl font-black text-emerald-700 tracking-tight">{formatCurrency(getTotalAmount())}</span>
+                            </div>
+                            <div className="bg-emerald-100 text-emerald-800 p-2.5 rounded-lg">
+                                <FaMoneyBillWave className="w-6 h-6" />
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Payment Method Card */}
+                    <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm text-gray-600">
+                        <div className="flex items-center gap-2 border-b border-gray-150 pb-3 mb-3">
+                            <FaRegCreditCard className="text-indigo-600" />
+                            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-800">Payment Method</h2>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div
+                                className={`border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all duration-200 active:scale-[0.97] ${
+                                    paymentMethod === "CASH" 
+                                        ? "bg-indigo-50/70 border-indigo-500 shadow-xs" 
+                                        : "bg-white border-gray-200 hover:bg-gray-50"
                                 }`}
                                 onClick={() => setPaymentMethod("CASH")}
                             >
-                                <div className="mr-3 bg-blue-100 p-2 rounded-full">
-                                    <FaMoneyBillWave
-                                        className={`h-6 w-6 ${
-                                            paymentMethod === "CASH" ? "text-blue-500" : "text-gray-400"
-                                        }`}
-                                    />
+                                <div className={`p-1.5 rounded-lg ${paymentMethod === "CASH" ? "bg-indigo-100 text-indigo-700" : "bg-gray-50 text-gray-400"}`}>
+                                    <FaMoneyBillWave className="h-5 w-5" />
                                 </div>
-                                <div>
-                                    <span
-                                        className={`font-medium ${
-                                            paymentMethod === "CASH" ? "text-blue-700" : "text-gray-700"
-                                        }`}
-                                    >
-                                        Cash Payment
+                                <div className="flex-1 min-w-0">
+                                    <span className={`text-xs font-bold block ${paymentMethod === "CASH" ? "text-indigo-700" : "text-gray-700"}`}>
+                                        Cash
                                     </span>
-                                    <p className="text-xs text-gray-500">Pay with physical cash</p>
+                                    <span className="text-[10px] text-slate-400 block truncate">Pay with physical cash</span>
                                 </div>
                                 <input
                                     type="radio"
@@ -640,31 +903,25 @@ export default function PaymentDetailsPage() {
                                     value="CASH"
                                     checked={paymentMethod === "CASH"}
                                     onChange={() => setPaymentMethod("CASH")}
-                                    className="ml-auto"
+                                    className="accent-indigo-600 shrink-0"
                                 />
                             </div>
                             <div
-                                className={`border rounded-lg p-4 flex items-center cursor-pointer ${
-                                    paymentMethod === "CARD" ? "bg-blue-50 border-blue-500" : "hover:bg-gray-100"
+                                className={`border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all duration-200 active:scale-[0.97] ${
+                                    paymentMethod === "CARD" 
+                                        ? "bg-indigo-50/70 border-indigo-500 shadow-xs" 
+                                        : "bg-white border-gray-200 hover:bg-gray-50"
                                 }`}
                                 onClick={() => setPaymentMethod("CARD")}
                             >
-                                <div className="mr-3 bg-blue-100 p-2 rounded-full">
-                                    <FaCreditCard
-                                        className={`h-6 w-6 ${
-                                            paymentMethod === "CARD" ? "text-blue-500" : "text-gray-400"
-                                        }`}
-                                    />
+                                <div className={`p-1.5 rounded-lg ${paymentMethod === "CARD" ? "bg-indigo-100 text-indigo-700" : "bg-gray-50 text-gray-400"}`}>
+                                    <FaCreditCard className="h-5 w-5" />
                                 </div>
-                                <div>
-                                    <span
-                                        className={`font-medium ${
-                                            paymentMethod === "CARD" ? "text-blue-700" : "text-gray-700"
-                                        }`}
-                                    >
-                                        Card Payment
+                                <div className="flex-1 min-w-0">
+                                    <span className={`text-xs font-bold block ${paymentMethod === "CARD" ? "text-indigo-700" : "text-gray-700"}`}>
+                                        Card
                                     </span>
-                                    <p className="text-xs text-gray-500">Pay with debit/credit card</p>
+                                    <span className="text-[10px] text-slate-400 block truncate">Pay online / scan QR</span>
                                 </div>
                                 <input
                                     type="radio"
@@ -672,14 +929,15 @@ export default function PaymentDetailsPage() {
                                     value="CARD"
                                     checked={paymentMethod === "CARD"}
                                     onChange={() => setPaymentMethod("CARD")}
-                                    className="ml-auto"
+                                    className="accent-indigo-600 shrink-0"
                                 />
                             </div>
                         </div>
+
                         {paymentMethod === "CARD" && (
-                            <div className="mt-4 border rounded-lg p-4 bg-white">
-                                <div className="flex items-center justify-between mb-2">
-                                    <h4 className="text-sm font-semibold text-gray-800">PayOS Embedded Checkout</h4>
+                            <div className="mt-4 border border-gray-200 rounded-xl p-4 bg-white/50 space-y-3">
+                                <div className="flex items-center justify-between border-b border-gray-150 pb-2">
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-mono">PayOS Embedded Checkout</h4>
                                     <button
                                         type="button"
                                         disabled={creatingIntent || cardStatus === "PAID" || regenerateCooldown > 0}
@@ -687,65 +945,86 @@ export default function PaymentDetailsPage() {
                                             await ensureCardIntent({ forceNew: true });
                                             setRegenerateCooldown(8);
                                         }}
-                                        className="text-xs text-blue-600 underline disabled:text-gray-400"
+                                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 disabled:text-gray-400 transition-colors"
                                     >
                                         {regenerateCooldown > 0
-                                            ? `Generate New QR (${regenerateCooldown}s)`
-                                            : "Generate New QR"}
+                                            ? `New QR (${regenerateCooldown}s)`
+                                            : "New QR"}
                                     </button>
                                 </div>
 
-                                {creatingIntent && <p className="text-sm text-gray-600 mb-2">Generating payment QR...</p>}
+                                {creatingIntent && (
+                                    <div className="flex items-center gap-2 py-4 justify-center text-xs text-slate-550 font-mono">
+                                        <FaSync className="animate-spin text-indigo-600 h-3.5 w-3.5" />
+                                        Generating payment QR...
+                                    </div>
+                                )}
 
                                 {!creatingIntent && paymentIntent?.checkout_url && (
-                                    <PayOSEmbed
-                                        className="min-h-[80vh] md:min-h-[72vh]"
-                                        elementId={embedElementId}
-                                        checkoutUrl={paymentIntent.checkout_url}
-                                        returnUrl={typeof window !== "undefined" ? window.location.href : undefined}
-                                        onError={(err) => {
-                                            toast.error(err?.message || "Failed to load embedded checkout");
-                                            setCardStatus("FAILED");
-                                        }}
-                                    />
+                                    <div className="rounded-lg overflow-hidden border border-gray-200 shadow-xs">
+                                        <PayOSEmbed
+                                            className="min-h-[60vh]"
+                                            elementId={embedElementId}
+                                            checkoutUrl={paymentIntent.checkout_url}
+                                            returnUrl={typeof window !== "undefined" ? window.location.href : undefined}
+                                            onError={(err) => {
+                                                toast.error(err?.message || "Failed to load embedded checkout");
+                                                setCardStatus("FAILED");
+                                            }}
+                                        />
+                                    </div>
                                 )}
 
                                 {!creatingIntent && !paymentIntent?.checkout_url && (
-                                    <p className="text-sm text-gray-600">Waiting for checkout URL...</p>
+                                    <p className="text-xs text-slate-500 font-mono text-center py-4">Waiting for checkout URL...</p>
                                 )}
 
-                                <p className="text-xs text-gray-500 mt-2">Status: {cardStatus}</p>
-                                <p className="text-xs text-gray-600">{CARD_STATUS_LABELS[cardStatus] || "Waiting for update"}</p>
+                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs font-mono space-y-1.5">
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500 uppercase tracking-widest text-[9px]">Status:</span>
+                                        <span className="font-bold text-slate-800">{cardStatus}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500 uppercase tracking-widest text-[9px]">Message:</span>
+                                        <span className="text-slate-650 text-right">{CARD_STATUS_LABELS[cardStatus] || "Waiting for update"}</span>
+                                    </div>
+                                </div>
                             </div>
                         )}
-                    </div>
-                    <div className="flex justify-between">
-                        <button
-                            onClick={() => router.replace("/employee/checkout")}
-                            className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleConfirmPayment}
-                            disabled={loading || paymentMethod === "CARD" || (showLostTicketForm && !isLostTicket)}
-                            className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 flex items-center"
-                        >
-                            {loading ? (
-                                <>
-                                    <FaSync className="animate-spin mr-2 h-4 w-4" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    <FaCheckCircle className="mr-2 h-4 w-4" />
-                                    {paymentMethod === "CARD" ? "Waiting for webhook confirmation" : "Confirm Payment"}
-                                </>
+                    </section>
+
+                    {/* Bottom Action Footer — hidden during success (gate will auto-close & redirect) */}
+                    {viewState !== "success" && (
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                onClick={() => router.replace("/employee/checkout")}
+                                className="flex-1 px-4 py-3 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer active:scale-[0.98]"
+                            >
+                                Cancel
+                            </button>
+                            {paymentMethod === "CASH" && (
+                                <button
+                                    onClick={handleCashCheckout}
+                                    disabled={viewState === "processing" || viewState === "success" || (showLostTicketForm && !isLostTicket)}
+                                    className="flex-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-transparent text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
+                                >
+                                    {viewState === "processing" ? (
+                                        <>
+                                            <FaSync className="animate-spin h-3.5 w-3.5" />
+                                            Processing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FaCheckCircle className="h-3.5 w-3.5" />
+                                            Confirm Cash Checkout
+                                        </>
+                                    )}
+                                </button>
                             )}
-                        </button>
-                    </div>
+                        </div>
+                    )}
                 </div>
             </div>
-        </div>
+        </main>
     );
 }

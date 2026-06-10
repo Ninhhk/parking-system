@@ -266,3 +266,34 @@ export async function createFeeConfigVersion(data) {
     const res = await api.post("/admin/fee-config/versions", data);
     return res.data.data;
 }
+
+// ===================== PARKING CARDS (CARD POOL) =====================
+// Fetch all pool cards (Card_UID, Assigned_Lot, status, created_at)
+export async function fetchParkingCards() {
+    const res = await api.get("/admin/parking-cards");
+    return res.data.data;
+}
+
+// Fetch pool inventory counts ({ total, available, lost })
+export async function fetchCardInventory() {
+    const res = await api.get("/admin/parking-cards/inventory");
+    return res.data.data;
+}
+
+// Add a card to the pool ({ card_uid, lot_id }); lot_id null = Shared
+export async function addParkingCard(card) {
+    const res = await api.post("/admin/parking-cards", card);
+    return res.data.data;
+}
+
+// Set a pool card's status ("available" | "lost")
+export async function setParkingCardStatus(cardUid, status) {
+    const res = await api.patch(`/admin/parking-cards/${cardUid}/status`, { status });
+    return res.data.data;
+}
+
+// Delete a card from the pool
+export async function deleteParkingCard(cardUid) {
+    const res = await api.delete(`/admin/parking-cards/${cardUid}`);
+    return res.data.data;
+}

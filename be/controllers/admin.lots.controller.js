@@ -100,7 +100,7 @@ exports.createParkingLot = async (req, res) => {
 exports.updateParkingLot = async (req, res) => {
     try {
         const { id } = req.params;
-        const { lot_name, car_capacity, bike_capacity, managed_by } = req.body;
+        const { lot_name, car_capacity, bike_capacity, managed_by, casual_entry_mode } = req.body;
 
         // Validate required fields
         if (!lot_name || !car_capacity || !bike_capacity) {
@@ -110,11 +110,20 @@ exports.updateParkingLot = async (req, res) => {
             });
         }
 
+        // Validate casual_entry_mode only when present; absent is allowed (repo COALESCEs it)
+        if (casual_entry_mode != null && !["session_ticket", "issued_card"].includes(casual_entry_mode)) {
+            return res.status(422).json({
+                success: false,
+                message: "Invalid casual entry mode",
+            });
+        }
+
         const updatedParkingLot = await lotsRepo.updateParkingLot(id, {
             lot_name,
             car_capacity,
             bike_capacity,
             managed_by,
+            casual_entry_mode,
         });
 
         if (!updatedParkingLot) {

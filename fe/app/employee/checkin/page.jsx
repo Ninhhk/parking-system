@@ -52,8 +52,8 @@ export default function UnifiedCheckinPage() {
     const [laneConfig, setLaneConfig] = useState(null);
     const [laneConfigError, setLaneConfigError] = useState(null);
 
-    // Casual mode from lot read
-    const [casualMode, setCasualMode] = useState("session_ticket");
+    // Casual mode from lot read (app-wide default: issued_card)
+    const [casualMode, setCasualMode] = useState("issued_card");
 
     // Kiosk state machine
     const [kioskState, setKioskState] = useState(KIOSK_STATES.IDLE);
@@ -96,8 +96,14 @@ export default function UnifiedCheckinPage() {
             .then((data) => {
                 clearTimeout(timeoutId);
                 setLaneConfig(data);
-                const lpd = Array.isArray(data.allowed_trigger_modules) &&
-                    data.allowed_trigger_modules.includes("LPD");
+                // LPD status comes from the backend, which now reflects the admin
+                // Camera Management config (active plate camera + enabled LPD module),
+                // not just the static lane policy. Fall back to the lane policy only
+                // if the backend doesn't report the flag (older API).
+                const lpd = typeof data.lpd_enabled === "boolean"
+                    ? data.lpd_enabled
+                    : (Array.isArray(data.allowed_trigger_modules) &&
+                        data.allowed_trigger_modules.includes("LPD"));
                 setLpdEnabled(lpd);
             })
             .catch((err) => {
@@ -119,12 +125,12 @@ export default function UnifiedCheckinPage() {
     useEffect(() => {
         fetchMyLot()
             .then((lot) => {
-                const mode = lot?.casual_entry_mode || "session_ticket";
+                const mode = lot?.casual_entry_mode || "issued_card";
                 setCasualMode(mode);
             })
             .catch(() => {
-                // Default to session_ticket if lot read fails
-                setCasualMode("session_ticket");
+                // Default to issued_card if lot read fails (app-wide default)
+                setCasualMode("issued_card");
             });
     }, []);
 

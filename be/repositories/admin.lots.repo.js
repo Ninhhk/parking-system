@@ -17,7 +17,7 @@ exports.getParkingLotById = async (lotId) => {
     const query = `
         SELECT 
             pl.lot_id, pl.lot_name, pl.car_capacity, pl.bike_capacity,
-            pl.current_car, pl.current_bike,
+            pl.current_car, pl.current_bike, pl.casual_entry_mode,
             u.username as manager_username
         FROM ParkingLots pl
         LEFT JOIN Users u ON pl.managed_by = u.user_id
@@ -54,10 +54,13 @@ exports.createParkingLot = async (parkingLotData) => {
 };
 
 exports.updateParkingLot = async (lotId, parkingLotData) => {
-    const { lot_name, car_capacity, bike_capacity, managed_by } = parkingLotData;
+    const { lot_name, car_capacity, bike_capacity, managed_by, casual_entry_mode } = parkingLotData;
 
     // Convert empty string to null for managed_by
     const managedByValue = managed_by === "" ? null : managed_by;
+
+    // Null when absent so COALESCE keeps the current casual_entry_mode
+    const casualEntryModeValue = casual_entry_mode == null ? null : casual_entry_mode;
 
     const query = `
         UPDATE ParkingLots
@@ -65,12 +68,13 @@ exports.updateParkingLot = async (lotId, parkingLotData) => {
             lot_name = $1,
             car_capacity = $2,
             bike_capacity = $3,
-            managed_by = $4
-        WHERE lot_id = $5
+            managed_by = $4,
+            casual_entry_mode = COALESCE($5, casual_entry_mode)
+        WHERE lot_id = $6
         RETURNING *
     `;
 
-    const result = await pool.query(query, [lot_name, car_capacity, bike_capacity, managedByValue, lotId]);
+    const result = await pool.query(query, [lot_name, car_capacity, bike_capacity, managedByValue, casualEntryModeValue, lotId]);
     return result.rows[0];
 };
 

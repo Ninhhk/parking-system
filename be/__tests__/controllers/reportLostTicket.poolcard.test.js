@@ -42,7 +42,7 @@ describe("employee.sessions.controller reportLostTicket pool-card hook", () => {
         jest.restoreAllMocks();
     });
 
-    // Validates: Requirements 11.4, 11.5
+    // Validates: Requirements 9.3
     it("marks the pool card lost when the session is bound to a card_uid", async () => {
         sessionsRepo.getSession.mockResolvedValue({ lot_id: 1, card_uid: "POOL-001" });
         const req = makeReq();
@@ -51,14 +51,14 @@ describe("employee.sessions.controller reportLostTicket pool-card hook", () => {
         await controller.reportLostTicket(req, res);
 
         expect(sessionsRepo.getSession).toHaveBeenCalledWith(99);
-        expect(parkingCardsRepo.markLost).toHaveBeenCalledWith(1, "POOL-001");
+        expect(parkingCardsRepo.markLost).toHaveBeenCalledWith("POOL-001");
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalledWith(
             expect.objectContaining({ success: true, penalty_fee: 50000 })
         );
     });
 
-    // Validates: Requirements 11.3, 11.4
+    // Validates: Requirements 9.3
     it("does NOT mark a card lost when the session has no card_uid", async () => {
         sessionsRepo.getSession.mockResolvedValue({ lot_id: 1, card_uid: null });
         const req = makeReq();
@@ -73,8 +73,8 @@ describe("employee.sessions.controller reportLostTicket pool-card hook", () => {
         );
     });
 
-    // Validates: Requirements 11.5
-    it("still returns 201 success when markLost fails (hook is wrapped in try/catch)", async () => {
+    // Validates: Requirements 9.4
+    it("logs structured failure context and still returns 201 when markLost fails", async () => {
         sessionsRepo.getSession.mockResolvedValue({ lot_id: 1, card_uid: "POOL-001" });
         parkingCardsRepo.markLost.mockRejectedValue(new Error("db down"));
         const req = makeReq();
@@ -82,7 +82,10 @@ describe("employee.sessions.controller reportLostTicket pool-card hook", () => {
 
         await controller.reportLostTicket(req, res);
 
-        expect(parkingCardsRepo.markLost).toHaveBeenCalledWith(1, "POOL-001");
+        expect(parkingCardsRepo.markLost).toHaveBeenCalledWith("POOL-001");
+        expect(console.error).toHaveBeenCalledWith(
+            JSON.stringify({ event: "pool_card_mark_lost_failed", card_uid: "POOL-001", session_id: 99 })
+        );
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalledWith(
             expect.objectContaining({ success: true, penalty_fee: 50000 })

@@ -1,6 +1,6 @@
 -- 015_parking_cards.sql
 -- Pool-card registry for issued-card casual entry mode.
--- Cards are SQL-seeded; no admin CRUD UI in scope.
+-- Cards are managed via the Card Pool admin UI (no SQL seed; real UIDs only).
 
 CREATE TABLE IF NOT EXISTS parking_cards (
     card_uid   VARCHAR(100) NOT NULL,
@@ -17,13 +17,3 @@ ALTER TABLE parking_cards
 ALTER TABLE parking_cards
     ADD CONSTRAINT chk_parking_cards_status
     CHECK (status IN ('available', 'lost'));
-
--- Seed demo pool cards for lot_id=1
-INSERT INTO parking_cards (card_uid, lot_id, status)
-VALUES
-    ('POOL-001', 1, 'available'),
-    ('POOL-002', 1, 'available'),
-    ('POOL-003', 1, 'available'),
-    ('POOL-004', 1, 'available'),
-    ('POOL-005', 1, 'available')
-ON CONFLICT DO NOTHING;
