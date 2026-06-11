@@ -3,7 +3,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FaSync } from "react-icons/fa";
+import { HiOutlineBolt } from "react-icons/hi2";
 
+import PageHeader from "@/app/components/employee/PageHeader";
 import {
     fetchEdgeActiveSessions,
     fetchEdgeEvents,
@@ -146,9 +148,16 @@ function EdgeMonitorContent() {
 
     return (
         <div className="p-6 bg-gray-100 min-h-screen space-y-6">
+            <PageHeader
+                title="Edge Ops Console"
+                subtitle="Edge ingest diagnostics & event pipeline"
+                icon={<HiOutlineBolt className="h-5 w-5" />}
+                accentColor="amber"
+                showFullscreen={true}
+            />
+
             <div className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <h1 className="text-xl font-semibold text-gray-900">Edge Ops Console</h1>
+                <div className="flex items-center justify-end gap-4 flex-wrap">
                     <button
                         type="button"
                         onClick={() => loadData({ silent: true })}
@@ -159,7 +168,7 @@ function EdgeMonitorContent() {
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-4">
                     <select
                         value={filters.status}
                         onChange={(e) => updateFilter("status", e.target.value)}

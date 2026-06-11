@@ -720,3 +720,40 @@ exports.getImagePresignedUrl = async (req, res) => {
         res.status(500).json({ success: false, message: "Internal server error" });
     }
 };
+
+// Upload an exit image for a session that was finalized outside this request
+// (e.g. CARD/QR finalized by the PayOS webhook). The webhook has no access to the
+// operator's live camera frame, so the browser uploads it here once payment is PAID.
+exports.uploadExitImage = async (req, res) => {
+    try {
+        const { session_id } = req.params;
+        const { image_out_base64 } = req.body;
+
+        if (!session_id) {
+            return res.status(422).json({ success: false, message: "Session ID is required" });
+        }
+        if (!isBase64Image(image_out_base64)) {
+            return res.status(422).json({ success: false, message: "Valid exit image is required" });
+        }
+
+        const session = await sessionsRepo.getSession(session_id);
+        if (!session) {
+            return res.status(404).json({ success: false, message: "Parking session not found" });
+        }
+
+        const objectKey = await uploadCheckoutImage(image_out_base64, {
+            lotId: String(session.lot_id),
+            sessionId: String(session_id),
+        });
+
+        if (!objectKey) {
+            return res.status(502).json({ success: false, message: "Failed to store exit image" });
+        }
+
+        await sessionsRepo.updateSessionImageUrl(Number(session_id), "image_out_url", objectKey);
+        res.status(200).json({ success: true, message: "Exit image stored" });
+    } catch (error) {
+        console.error("Upload exit image error:", error);
+        res.status(500).json({ success: false, message: "Internal server error" });
+    }
+};

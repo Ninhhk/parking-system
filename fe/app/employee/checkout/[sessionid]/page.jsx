@@ -9,6 +9,7 @@ import {
     createPaymentIntent,
     regeneratePaymentIntent,
     fetchPaymentStatus,
+    uploadExitImage,
 } from "@/app/api/employee.client";
 import { useToast } from "@/app/components/providers/ToastProvider";
 import {
@@ -28,6 +29,7 @@ import SessionImage from "@/app/components/common/SessionImage";
 import KioskCameraPanel from "@/app/employee/checkin/components/KioskCameraPanel";
 import GateStatusPanel from "@/app/employee/checkin/components/GateStatusPanel";
 import { detectLicensePlate } from "@/app/api/employee.lpd.client";
+import { fetchEmployeeGateSettings } from "@/app/api/admin.gateSettings.client";
 
 const CARD_STATUS_LABELS = {
     PENDING: "Pending payment",
@@ -38,7 +40,6 @@ const CARD_STATUS_LABELS = {
     REQUIRES_PAYMENT_METHOD: "Requires payment method",
 };
 
-const GATE_AUTO_CLOSE_MS = 4000;
 const CASH_CONFIRM_TIMEOUT_MS = 10000;
 
 const makeIdempotencyKey = (prefix, sessionId) => `${prefix}-${sessionId}-${Date.now()}`;
@@ -101,7 +102,10 @@ export default function PaymentDetailsPage() {
     // Gate state machine (matches kiosk check-in pattern)
     const [gateState, setGateState] = useState("shut");
     const gateTimerRef = useRef(null);
-    const gateContextRef = useRef(null); // "checkout" | "manual" | null
+    const gateContextRef = useRef(null); // "checkout" | "manual" | "hold" | null
+
+    // Configurable auto-close duration (fetched from server, fallback 4000ms)
+    const [autoCloseDurationMs, setAutoCloseDurationMs] = useState(4000);
 
     // View state machine for checkout flow
     const [viewState, setViewState] = useState("input"); // "input" | "processing" | "success" | "payment_failed"
@@ -116,6 +120,19 @@ export default function PaymentDetailsPage() {
         return () => {
             isMountedRef.current = false;
         };
+    }, []);
+
+    // Fetch gate auto-close setting on mount (Req 3.1, 3.3, 3.4)
+    useEffect(() => {
+        fetchEmployeeGateSettings()
+            .then((data) => {
+                if (data?.auto_close_duration_seconds) {
+                    setAutoCloseDurationMs(data.auto_close_duration_seconds * 1000);
+                }
+            })
+            .catch((err) => {
+                console.warn("Failed to fetch gate settings, using default 4000ms", err);
+            });
     }, []);
 
     // Cleanup gate timer on unmount (matches kiosk pattern)
@@ -137,7 +154,7 @@ export default function PaymentDetailsPage() {
             setSuccessDetail(detail);
         }
         if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
-        gateTimerRef.current = setTimeout(closeGate, GATE_AUTO_CLOSE_MS);
+        gateTimerRef.current = setTimeout(closeGate, autoCloseDurationMs);
     }
 
     function closeGate() {
@@ -158,8 +175,18 @@ export default function PaymentDetailsPage() {
         gateContextRef.current = null;
     }
 
+    // Hold-mode open: no timer started (Req 4.1, 4.2, 4.3, 4.6)
+    function handleHoldOpen() {
+        if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
+        gateTimerRef.current = null;
+        setGateState("open");
+        gateContextRef.current = "hold";
+    }
+
     // Manual Gate Open: open gate without finalize/Success_View (Req 3.8, 3.9)
+    // If in hold mode, no-op — hold takes priority (Req 4.5)
     function handleManualGateOpen() {
+        if (gateContextRef.current === "hold") return;
         if (viewState !== "success") {
             openGate("manual", null);
         }
@@ -423,6 +450,19 @@ export default function PaymentDetailsPage() {
                 if (nextStatus === "PAID") {
                     // Req 2.1, 2.2, 2.3: stop polling, open gate + Success_View
                     clearInterval(timer);
+
+                    // Capture the live exit frame and persist it. The PayOS webhook
+                    // finalizes the session server-side and has no access to the
+                    // operator's camera, so the browser uploads the image here to
+                    // mirror the cash flow (otherwise image_out_url stays null).
+                    const imageOut = checkoutCameraRef.current?.capture();
+                    if (imageOut) {
+                        uploadExitImage(sessionid, imageOut).catch(() => {
+                            // Non-blocking: image is supplementary evidence, don't
+                            // hold up the gate on an upload failure.
+                        });
+                    }
+
                     toast.success("Card payment confirmed");
                     const detail = {
                         license_plate: checkout.session.license_plate,
@@ -661,10 +701,12 @@ export default function PaymentDetailsPage() {
 
                 {/* Right Column (5/12 width) - Sidebar */}
                 <div className="lg:col-span-5 space-y-6">
-                    {/* Gate Status Panel (Req 3.7) */}
+                    {/* Gate Status Panel (Req 3.7, 4.1, 4.8) */}
                     <GateStatusPanel
                         isOpen={gateState === "open"}
+                        isHoldMode={gateContextRef.current === "hold"}
                         onManualOpen={handleManualGateOpen}
+                        onHoldOpen={handleHoldOpen}
                         onManualClose={handleManualGateClose}
                     />
 

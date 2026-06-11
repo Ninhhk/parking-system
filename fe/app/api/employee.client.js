@@ -59,6 +59,15 @@ export async function confirmCheckout(sessionId, paymentMethod, imageOutBase64) 
     return res.data;
 }
 
+// Upload the exit image for a CARD/QR checkout finalized server-side by the webhook.
+// The webhook cannot access the operator's live camera, so the browser uploads it here.
+export async function uploadExitImage(sessionId, imageOutBase64) {
+    const res = await api.post(`/employee/parking/exit/${sessionId}/exit-image`, {
+        image_out_base64: imageOutBase64,
+    });
+    return res.data;
+}
+
 export async function createPaymentIntent(sessionId, idempotencyKey, amount) {
     const res = await api.post(`/employee/parking/exit/${sessionId}/payment-intents`, {
         payment_method: "CARD",

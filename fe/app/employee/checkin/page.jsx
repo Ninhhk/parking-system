@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getGatewayLaneConfig, getSubscriptionByCard, checkInByRfid, checkInVehicle, fetchMyLot } from "@/app/api/employee.client";
+import { fetchEmployeeGateSettings } from "@/app/api/admin.gateSettings.client";
 import { detectLicensePlate } from "@/app/api/employee.lpd.client";
 import KioskCameraPanel from "./components/KioskCameraPanel";
 import ReaderPanel from "./components/ReaderPanel";
@@ -73,6 +74,7 @@ export default function UnifiedCheckinPage() {
 
     // Gate (simulated)
     const [gateState, setGateState] = useState("shut");
+    const [autoCloseDurationMs, setAutoCloseDurationMs] = useState(4000);
 
     // Result
     const [resultDetail, setResultDetail] = useState("");
@@ -84,6 +86,7 @@ export default function UnifiedCheckinPage() {
     // Refs
     const cameraRef = useRef(null);
     const gateTimerRef = useRef(null);
+    const gateContextRef = useRef(null); // "manual" | "hold" | null
     // Holds the in-flight submission so a capture-failure Retry/Proceed choice can resume it
     const pendingSubmitRef = useRef(null);
 
@@ -131,6 +134,19 @@ export default function UnifiedCheckinPage() {
             .catch(() => {
                 // Default to issued_card if lot read fails (app-wide default)
                 setCasualMode("issued_card");
+            });
+    }, []);
+
+    // --- On mount: fetch gate auto-close setting ---
+    useEffect(() => {
+        fetchEmployeeGateSettings()
+            .then((data) => {
+                if (data?.auto_close_duration_seconds) {
+                    setAutoCloseDurationMs(data.auto_close_duration_seconds * 1000);
+                }
+            })
+            .catch((err) => {
+                console.warn("[Kiosk] Failed to fetch gate settings, using default 4000ms:", err.message);
             });
     }, []);
 
@@ -421,12 +437,33 @@ export default function UnifiedCheckinPage() {
         }
     };
 
-    const handleManualGateOpen = () => {
+    // Hold-mode open: no timer started (Req 4.1, 4.2, 4.3)
+    const handleHoldOpen = () => {
+        if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
+        gateTimerRef.current = null;
         setGateState("open");
+        gateContextRef.current = "hold";
+    };
+
+    // Normal open: uses configured duration
+    // If in hold mode, no-op — hold takes priority (Req 4.5)
+    const handleManualGateOpen = () => {
+        if (gateContextRef.current === "hold") return;
+        setGateState("open");
+        gateContextRef.current = "manual";
         if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
         gateTimerRef.current = setTimeout(() => {
             setGateState("shut");
-        }, 5000);
+            gateContextRef.current = null;
+        }, autoCloseDurationMs);
+    };
+
+    // Close: works for both normal and hold mode (Req 4.4)
+    const handleManualGateClose = () => {
+        if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
+        gateTimerRef.current = null;
+        setGateState("shut");
+        gateContextRef.current = null;
     };
 
     const isScanning = kioskState === KIOSK_STATES.SCANNING;
@@ -501,7 +538,10 @@ export default function UnifiedCheckinPage() {
                 <div className="lg:col-span-5 space-y-6">
                     <GateStatusPanel
                         isOpen={gateState === "open"}
+                        isHoldMode={gateContextRef.current === "hold"}
                         onManualOpen={handleManualGateOpen}
+                        onHoldOpen={handleHoldOpen}
+                        onManualClose={handleManualGateClose}
                     />
 
                     <ReaderPanel

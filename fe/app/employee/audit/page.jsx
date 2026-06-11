@@ -6,6 +6,8 @@ import SessionAuditTable from "@/app/components/employee/audit/SessionAuditTable
 import SessionDetailModal from "@/app/components/employee/audit/SessionDetailModal";
 import { fetchAuditSessions } from "@/app/api/employee.audit.client";
 import { fetchParkingLots } from "@/app/api/employee.client";
+import PageHeader from "@/app/components/employee/PageHeader";
+import { HiOutlineDocumentText } from "react-icons/hi2";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -18,18 +20,6 @@ export default function AuditPage() {
     const [error, setError] = useState(null);
     const [selectedSession, setSelectedSession] = useState(null);
     const [lots, setLots] = useState([]);
-    const [currentTime, setCurrentTime] = useState("");
-
-    // Clock effect matching the RFID kiosk page
-    useEffect(() => {
-        const updateClock = () => {
-            const now = new Date();
-            setCurrentTime(now.toLocaleTimeString("en-US", { hour12: false }));
-        };
-        updateClock();
-        const timer = setInterval(updateClock, 1000);
-        return () => clearInterval(timer);
-    }, []);
 
     // Fetch parking lots for the filter dropdown
     useEffect(() => {
@@ -80,25 +70,13 @@ export default function AuditPage() {
 
     return (
         <main className="mx-auto max-w-6xl p-6 bg-white text-slate-800 rounded-2xl border border-gray-200 shadow-xs my-4 w-full">
-            {/* Corporate Header bar matching RFID kiosk */}
-            <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-150 pb-4 mb-6 gap-3">
-                <div>
-                    <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse" />
-                        <h1 className="text-xl font-bold uppercase tracking-wider text-slate-900 font-mono">
-                            Session Audit Logs
-                        </h1>
-                    </div>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">VEHICLE TRANSACTION HISTORY & AUDIT TRAIL</p>
-                </div>
-
-                <div className="flex items-center gap-4 text-xs font-mono">
-                    <div className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded flex items-center gap-2 text-slate-600 shadow-xs">
-                        <span className="text-slate-400 uppercase tracking-widest text-[9px]">CLOCK:</span>
-                        <span className="font-bold text-indigo-600 tracking-widest">{currentTime || "00:00:00"}</span>
-                    </div>
-                </div>
-            </header>
+            <PageHeader
+                title="Session Audit Logs"
+                subtitle="Historical session records & audit trail"
+                icon={<HiOutlineDocumentText className="h-5 w-5" />}
+                accentColor="indigo"
+                showFullscreen={false}
+            />
 
             <FilterBar onSearch={handleSearch} onReset={handleReset} lots={lots} />
 

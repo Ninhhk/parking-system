@@ -15,6 +15,7 @@ import {
     HiSpeakerphone,
     HiVideoCamera,
     HiCreditCard,
+    HiLockOpen,
 } from "react-icons/hi";
 import { HiCheckBadge, HiDocumentCurrencyDollar, HiPresentationChartLine, HiSpeakerXMark } from "react-icons/hi2";
 
@@ -90,6 +91,11 @@ const Sidebar = () => {
             name: "Pricing Engine",
             href: "/admin/fee-config",
             icon: <HiCog className="mr-3 h-6 w-6" />,
+        },
+        {
+            name: "Gate Settings",
+            href: "/admin/gate-settings",
+            icon: <HiLockOpen className="mr-3 h-6 w-6" />,
         },
         {
             name: "Notifications",

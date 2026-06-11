@@ -22,21 +22,40 @@ import {
 
 import { logout } from "../../api/auth.client";
 import { useUser } from "../providers/UserProvider";
+import api from "../../api/client.config";
+import BellPreview from "./BellPreview";
 
 const Navbar = () => {
     const pathname = usePathname();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [notifications, setNotifications] = useState(null);
+    const [previewOpen, setPreviewOpen] = useState(false);
     const { user } = useUser();
-
-    // Only render on employee pages
-    if (!pathname?.startsWith("/employee")) {
-        return null;
-    }
 
     // Close mobile menu when navigating
     useEffect(() => {
         setMobileMenuOpen(false);
     }, [pathname]);
+
+    // Fetch notifications on mount
+    useEffect(() => {
+        const fetchNotifications = async () => {
+            try {
+                const response = await api.get("/employee/notifications");
+                setNotifications(response.data.data);
+            } catch {
+                setNotifications(null);
+            }
+        };
+        fetchNotifications();
+    }, []);
+
+    // Only render on employee pages (after hooks, to respect Rules of Hooks)
+    if (!pathname?.startsWith("/employee")) {
+        return null;
+    }
+
+    const hasUnread = Array.isArray(notifications) && notifications.some(n => n.read_at === null);
 
     const isActive = (path) => pathname === path;
 
@@ -83,7 +102,7 @@ const Navbar = () => {
                     </div>
 
                     {/* Middle: Desktop Nav Links */}
-                    <div className="hidden lg:flex items-center space-x-1">
+                    <div className="hidden lg:flex items-center space-x-1 overflow-hidden">
                         {navItems.map((item) => {
                             const active = isActive(item.href);
                             return (
@@ -105,10 +124,20 @@ const Navbar = () => {
 
                     {/* Right: Notification & User Panel */}
                     <div className="hidden sm:flex items-center gap-4">
-                        <Link href="/employee/notifications" className="p-1.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-50 relative">
-                            <HiBell className="h-5 w-5" />
-                            <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
-                        </Link>
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setPreviewOpen(!previewOpen)}
+                                className="p-1.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-50 relative cursor-pointer"
+                                aria-label="Notifications"
+                            >
+                                <HiBell className="h-5 w-5" />
+                                {hasUnread && (
+                                    <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />
+                                )}
+                            </button>
+                            <BellPreview open={previewOpen} notifications={notifications} onClose={() => setPreviewOpen(false)} />
+                        </div>
 
                         <div className="flex items-center gap-3 pl-2 border-l border-gray-200">
                             {/* User Avatar Circle */}

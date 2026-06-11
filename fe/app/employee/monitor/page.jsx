@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchMyLot, fetchMyParkingSessions } from "../../api/employee.client";
 import { FaParking, FaCar, FaMotorcycle, FaClipboardList, FaSync, FaExclamationCircle } from "react-icons/fa";
+import PageHeader from "@/app/components/employee/PageHeader";
 
 // LotStatCard component to display stat in a styled card
 function LotStatCard({ title, value, icon, color }) {
@@ -262,6 +263,13 @@ export default function LotMonitorPage() {
 
     return (
         <div className="p-6 bg-gray-100 min-h-screen">
+            <PageHeader
+                title="Lot Monitor"
+                subtitle="Real-time parking capacity overview"
+                icon={<FaParking className="h-5 w-5" />}
+                accentColor="blue"
+                showFullscreen={true}
+            />
             <LotStatus lot={lot} loading={loading} />
             <ActiveSessionsTable sessions={sessions} />
         </div>

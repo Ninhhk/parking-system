@@ -14,6 +14,7 @@ const edgeController = require("../controllers/employee.edge.controller");
 const gatewayController = require("../controllers/employee.gateway.controller");
 const sessionAuditController = require("../controllers/session.audit.controller");
 const subscriptionController = require("../controllers/employee.subscription.controller");
+const gateSettingsController = require("../controllers/admin.gateSettings.controller");
 
 // Audit route — accessible by both employee and admin roles
 router.get(
@@ -21,6 +22,14 @@ router.get(
     authMiddleware.isAuthenticated,
     authMiddleware.hasRole(["employee", "admin"]),
     sessionAuditController.getAuditSessions
+);
+
+// Gate settings — accessible by authenticated employees (and admin)
+router.get(
+    "/gate-settings",
+    authMiddleware.isAuthenticated,
+    authMiddleware.hasRole(["employee", "admin"]),
+    gateSettingsController.getGateSettings
 );
 
 router.use(authMiddleware.isAuthenticated, authMiddleware.hasRole(["employee"]));
@@ -54,6 +63,7 @@ router.post(
     employeePaymentController.regenerateIntent
 );
 router.get("/parking/exit/:session_id/payment-status", employeePaymentController.getPaymentStatus);
+router.post("/parking/exit/:session_id/exit-image", sessionsController.uploadExitImage);
 router.post("/parking/edge/checkin-event", edgeController.ingestCheckinEvent);
 router.get("/sessions/:session_id/image-presigned", sessionsController.getImagePresignedUrl);
 
