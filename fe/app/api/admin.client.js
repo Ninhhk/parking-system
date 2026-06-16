@@ -297,3 +297,27 @@ export async function deleteParkingCard(cardUid) {
     const res = await api.delete(`/admin/parking-cards/${cardUid}`);
     return res.data.data;
 }
+
+// Toggle monthly subscription state on a pool card
+export async function updateCardMonthly(cardUid, { is_monthly, monthly_end_date }) {
+    const res = await api.patch(`/admin/parking-cards/${cardUid}/monthly`, { is_monthly, monthly_end_date });
+    return res.data.data;
+}
+
+// Fetch audit sessions (admin-namespaced — admin role guaranteed access)
+export async function fetchAdminAuditSessions({ plate, sessionId, cardUid, startDate, endDate, vehicleType, lotId, status, page, pageSize } = {}) {
+    const params = {};
+    if (plate) params.plate = plate;
+    if (sessionId) params.sessionId = sessionId;
+    if (cardUid) params.cardUid = cardUid;
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    if (vehicleType) params.vehicleType = vehicleType;
+    if (lotId) params.lotId = lotId;
+    if (status) params.status = status;
+    if (page) params.page = page;
+    if (pageSize) params.pageSize = pageSize;
+
+    const res = await api.get("/admin/audit/sessions", { params });
+    return res.data.data;
+}

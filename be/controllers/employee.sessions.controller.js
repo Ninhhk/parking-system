@@ -10,10 +10,10 @@ const {
     RFID_CHECKIN_ENABLED,
 } = require("../config/constants");
 const checkoutService = require("../services/checkout.service");
-const { uploadCheckinImage, uploadCheckoutImage, isBase64Image } = require("../services/image.upload.helper");
+const { uploadCheckinImage, uploadCheckoutImage, uploadLostTicketImage, isBase64Image } = require("../services/image.upload.helper");
 const { getPresignedUrl } = require("../services/minio.service");
 const parkingCardsRepo = require("../repositories/parkingCards.repo");
-const { evaluateIssuedCardEntry } = require("../services/issuedCardEntry");
+const { evaluateIssuedCardEntry, deriveEffectiveMonthly } = require("../services/issuedCardEntry");
 
 // Vehicle Entry - Create a new parking session
 exports.checkInVehicle = async (req, res) => {
@@ -85,8 +85,9 @@ exports.checkInVehicle = async (req, res) => {
         }
 
         // Validate pool card for issued-card casual entries
+        let poolCard = null;
         if (isCasual && card_uid) {
-            const poolCard = await parkingCardsRepo.getPoolCard(card_uid);
+            poolCard = await parkingCardsRepo.getPoolCard(card_uid);
             const decision = evaluateIssuedCardEntry(poolCard, parkingLot.lot_id);
             if (!decision.accept) {
                 return res.status(decision.status).json({
@@ -97,8 +98,12 @@ exports.checkInVehicle = async (req, res) => {
         }
 
         // Check if vehicle has a monthly subscription
+        // Card-based monthly takes priority (new model), then fall back to plate-based (legacy)
         let is_monthly = false;
-        if (license_plate) {
+        if (poolCard) {
+            is_monthly = deriveEffectiveMonthly(poolCard);
+        }
+        if (!is_monthly && license_plate) {
             const today = getToday();
             const monthlyPass = await sessionsRepo.checkMonthlySub(license_plate, vehicle_type, today);
             is_monthly = !!monthlyPass;
@@ -262,8 +267,14 @@ exports.checkInByRfid = async (req, res) => {
         let newSession;
         let hasBase64Image = isBase64Image(image_in_url);
         try {
-            const today = getToday();
-            const monthlyPass = await sessionsRepo.checkMonthlySubByCard(card_uid, vehicle_type, today);
+            // Card-based monthly takes priority (new model), then fall back to card→plate legacy lookup
+            const poolCard = await parkingCardsRepo.getPoolCard(card_uid);
+            let is_monthly = deriveEffectiveMonthly(poolCard);
+            if (!is_monthly) {
+                const today = getToday();
+                const monthlyPass = await sessionsRepo.checkMonthlySubByCard(card_uid, vehicle_type, today);
+                is_monthly = !!monthlyPass;
+            }
             const optionalFields = { etag_epc, entry_lane_id, metadata_in };
             // Only pass image_in_url if it's NOT base64 (backward compat for URLs)
             if (image_in_url !== undefined && !hasBase64Image) {
@@ -274,7 +285,7 @@ exports.checkInByRfid = async (req, res) => {
                 license_plate: license_plate || null,
                 card_uid,
                 vehicle_type,
-                is_monthly: !!monthlyPass,
+                is_monthly,
                 ...Object.fromEntries(
                     Object.entries(optionalFields).filter(([, v]) => v !== undefined)
                 ),
@@ -637,7 +648,17 @@ exports.reportLostTicket = async (req, res) => {
         });
     }
     try {
-        const report = await sessionsRepo.reportLostTicket({ session_id, guest_identification, guest_phone });
+        // Upload guest ID image to MinIO if it's base64; store the object key instead of the blob.
+        let identification = guest_identification;
+        if (isBase64Image(guest_identification)) {
+            const objectKey = await uploadLostTicketImage(guest_identification, { sessionId: String(session_id) });
+            if (objectKey) {
+                identification = objectKey;
+            }
+            // If upload fails, fall back to storing the base64 (graceful degradation)
+        }
+
+        const report = await sessionsRepo.reportLostTicket({ session_id, guest_identification: identification, guest_phone });
         await sessionsRepo.syncLostTicketStatus(session_id); // Ensure is_lost is updated immediately
 
         // Mark pool card as lost if session was bound to one (best-effort).

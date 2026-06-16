@@ -15,6 +15,7 @@ const gatewayController = require("../controllers/employee.gateway.controller");
 const sessionAuditController = require("../controllers/session.audit.controller");
 const subscriptionController = require("../controllers/employee.subscription.controller");
 const gateSettingsController = require("../controllers/admin.gateSettings.controller");
+const checkoutSettingsController = require("../controllers/admin.checkoutSettings.controller");
 
 // Audit route — accessible by both employee and admin roles
 router.get(
@@ -30,6 +31,14 @@ router.get(
     authMiddleware.isAuthenticated,
     authMiddleware.hasRole(["employee", "admin"]),
     gateSettingsController.getGateSettings
+);
+
+// Checkout settings — accessible by authenticated employees (and admin)
+router.get(
+    "/checkout-settings",
+    authMiddleware.isAuthenticated,
+    authMiddleware.hasRole(["employee", "admin"]),
+    checkoutSettingsController.getCheckoutSettings
 );
 
 router.use(authMiddleware.isAuthenticated, authMiddleware.hasRole(["employee"]));

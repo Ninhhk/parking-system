@@ -12,8 +12,11 @@ const getGateSettings = async (req, res) => {
 
 const updateGateSettings = async (req, res) => {
     try {
-        const { auto_close_duration_seconds } = req.body;
-        const result = await gateSettingsService.updateGateSettings(auto_close_duration_seconds);
+        const { auto_close_duration_seconds, kiosk_input_reset_seconds } = req.body;
+        const result = await gateSettingsService.updateGateSettings({
+            auto_close_duration_seconds,
+            kiosk_input_reset_seconds,
+        });
 
         if (!result.success) {
             return res.status(result.status).json({

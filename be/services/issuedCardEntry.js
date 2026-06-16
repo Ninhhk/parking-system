@@ -30,4 +30,30 @@ function evaluateIssuedCardEntry(poolCard, employeeLotId) {
     return { accept: true };
 }
 
-module.exports = { evaluateIssuedCardEntry };
+/**
+ * Derives whether a pool card is currently a valid monthly subscription.
+ * Uses lazy expiry: monthly is effective iff flag is on AND end_date >= today.
+ * Pure function, no I/O.
+ *
+ * @param {Object|null} poolCard - Pool_Card row with is_monthly, monthly_end_date
+ * @param {Date|string} [today] - Override for testing; defaults to current date
+ * @returns {boolean}
+ */
+function deriveEffectiveMonthly(poolCard, today) {
+    if (!poolCard) return false;
+    if (!poolCard.is_monthly) return false;
+    if (!poolCard.monthly_end_date) return false;
+
+    // Normalize today to YYYY-MM-DD string for comparison
+    const todayDate = today ? new Date(today) : new Date();
+    const todayStr = todayDate.toISOString().slice(0, 10);
+
+    // monthly_end_date from pg comes as Date object or string; normalize
+    const endDate = poolCard.monthly_end_date instanceof Date
+        ? poolCard.monthly_end_date.toISOString().slice(0, 10)
+        : String(poolCard.monthly_end_date).slice(0, 10);
+
+    return endDate >= todayStr;
+}
+
+module.exports = { evaluateIssuedCardEntry, deriveEffectiveMonthly };

@@ -40,8 +40,14 @@ const loadControllerWithFlag = (rfidEnabled) => {
     jest.doMock("../../repositories/employee.sessions.repo", () => sessionsRepo);
     jest.doMock("../../repositories/admin.lots.repo", () => lotsRepo);
 
+    const parkingCardsRepo = {
+        getPoolCard: jest.fn().mockResolvedValue(null),
+        markLost: jest.fn(),
+    };
+    jest.doMock("../../repositories/parkingCards.repo", () => parkingCardsRepo);
+
     const controller = require("../../controllers/employee.sessions.controller");
-    return { controller, sessionsRepo, lotsRepo };
+    return { controller, sessionsRepo, lotsRepo, parkingCardsRepo };
 };
 
 describe("Bug 2 fix — checkInByRfid controller", () => {

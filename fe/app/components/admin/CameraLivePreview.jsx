@@ -102,8 +102,8 @@ export default function CameraLivePreview({ camera }) {
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
             <div className="bg-gray-800 text-white px-4 py-3 flex items-center justify-between">
                 <div>
-                    <h4 className="text-sm font-semibold">Live Preview</h4>
-                    <p className="text-xs text-gray-300">{camera.camera_name}</p>
+                    <h4 className="text-sm font-semibold">Local Device Preview</h4>
+                    <p className="text-xs text-gray-300">{camera.camera_name} — commissioning only</p>
                 </div>
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${

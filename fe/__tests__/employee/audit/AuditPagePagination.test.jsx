@@ -1,15 +1,12 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import AuditPage from "@/app/employee/audit/page";
+import AuditPage from "@/app/admin/audit/page";
 
-jest.mock("@/app/api/employee.audit.client", () => ({
-    fetchAuditSessions: jest.fn(),
-}));
-
-jest.mock("@/app/api/employee.client", () => ({
+jest.mock("@/app/api/admin.client", () => ({
+    fetchAdminAuditSessions: jest.fn(),
     fetchParkingLots: jest.fn().mockResolvedValue([]),
 }));
 
-import { fetchAuditSessions } from "@/app/api/employee.audit.client";
+import { fetchAdminAuditSessions as fetchAuditSessions } from "@/app/api/admin.client";
 
 describe("AuditPage pagination controls", () => {
     beforeEach(() => {

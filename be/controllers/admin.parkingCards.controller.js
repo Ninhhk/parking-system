@@ -86,3 +86,35 @@ exports.deleteCard = async (req, res) => {
         return handleServiceError(res, err);
     }
 };
+
+exports.updateMonthly = async (req, res) => {
+    const { card_uid } = req.params;
+    const { is_monthly, monthly_end_date } = req.body;
+
+    if (!isValidCardUid(card_uid)) {
+        return res.status(422).json({ success: false, message: "Invalid card UID" });
+    }
+    if (typeof is_monthly !== "boolean") {
+        return res.status(422).json({ success: false, message: "is_monthly must be a boolean" });
+    }
+    if (is_monthly && !monthly_end_date) {
+        return res.status(422).json({ success: false, message: "monthly_end_date is required when enabling monthly" });
+    }
+    // Validate date format if provided
+    if (monthly_end_date) {
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(monthly_end_date) || Number.isNaN(new Date(monthly_end_date).getTime())) {
+            return res.status(422).json({ success: false, message: "monthly_end_date must be a valid YYYY-MM-DD date" });
+        }
+    }
+
+    try {
+        const card = await parkingCardsService.updateMonthly(card_uid, {
+            is_monthly,
+            monthly_end_date: is_monthly ? monthly_end_date : null,
+        });
+        return res.status(200).json({ success: true, data: card });
+    } catch (err) {
+        return handleServiceError(res, err);
+    }
+};

@@ -15,9 +15,6 @@ import {
 import {
     HiOutlineArrowLeftEndOnRectangle,
     HiOutlineArrowRightEndOnRectangle,
-    HiOutlineClipboard,
-    HiOutlineBolt,
-    HiOutlineDocumentText,
 } from "react-icons/hi2";
 
 import { logout } from "../../api/auth.client";
@@ -61,11 +58,8 @@ const Navbar = () => {
 
     const navItems = [
         { name: "Home", href: "/employee/", icon: <HiHome className="mr-1.5 h-4 w-4" /> },
-        { name: "Lot Monitor", href: "/employee/monitor", icon: <HiOutlineClipboard className="mr-1.5 h-4 w-4" /> },
-        { name: "Edge Ops", href: "/employee/edge-monitor", icon: <HiOutlineBolt className="mr-1.5 h-4 w-4" /> },
         { name: "Check-in", href: "/employee/checkin", icon: <HiOutlineArrowRightEndOnRectangle className="mr-1.5 h-4 w-4" /> },
         { name: "Check-out", href: "/employee/checkout", icon: <HiOutlineArrowLeftEndOnRectangle className="mr-1.5 h-4 w-4" /> },
-        { name: "Audit", href: "/employee/audit", icon: <HiOutlineDocumentText className="mr-1.5 h-4 w-4" /> },
         { name: "Alerts", href: "/employee/notifications", icon: <HiSpeakerphone className="mr-1.5 h-4 w-4" /> },
         { name: "Profile", href: "/employee/profile", icon: <HiIdentification className="mr-1.5 h-4 w-4" /> },
     ];

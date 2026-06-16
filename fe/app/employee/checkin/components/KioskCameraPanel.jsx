@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from "re
  * Always-on camera panel for the unified kiosk.
  * Exposes a `capture()` method via ref that returns a base64 JPEG string.
  */
-const KioskCameraPanel = forwardRef(function KioskCameraPanel(_, ref) {
+const KioskCameraPanel = forwardRef(function KioskCameraPanel({ onReady } = {}, ref) {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const streamRef = useRef(null);
@@ -34,6 +34,9 @@ const KioskCameraPanel = forwardRef(function KioskCameraPanel(_, ref) {
                     await videoRef.current.play();
                 }
                 setStatus("live");
+                if (typeof onReady === "function") {
+                    onReady();
+                }
             } catch (err) {
                 if (mounted) {
                     setErrorMsg(err.name === "NotAllowedError" ? "Camera permission denied" : err.message);

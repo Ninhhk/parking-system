@@ -118,6 +118,22 @@ const SessionDetailModal = ({ session, onClose }) => {
                             <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono mb-0.5">Vehicle Type</span>
                             <p className="text-sm font-mono font-bold text-slate-800 capitalize">{session.vehicle_type || "—"}</p>
                         </div>
+
+                        <div className="col-span-2 border-t border-slate-150 pt-3 grid grid-cols-2 gap-x-6">
+                            <div className="border-r border-slate-150 pr-2">
+                                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono mb-0.5">Session ID</span>
+                                <p className="text-xs font-mono font-semibold text-slate-700">#{session.session_id}</p>
+                            </div>
+                            <div>
+                                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono mb-0.5">Card ID</span>
+                                <p className="text-xs font-mono font-semibold text-slate-700 uppercase">{session.card_uid || "—"}</p>
+                            </div>
+                        </div>
+
+                        <div className="col-span-2 border-t border-slate-150 pt-3">
+                            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono mb-0.5">Pass Type</span>
+                            <p className="text-xs font-mono font-semibold text-slate-700">{session.is_monthly ? "Monthly" : "Casual"}</p>
+                        </div>
                         
                         <div className="col-span-2 border-t border-slate-150 pt-3 grid grid-cols-2 gap-x-6">
                             <div className="border-r border-slate-150 pr-2">

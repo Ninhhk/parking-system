@@ -6,10 +6,11 @@ export async function fetchGateSettings() {
     return res.data.data;
 }
 
-// Update gate auto-close duration (admin only)
-export async function updateGateSettings(durationSeconds) {
+// Update gate settings (admin only)
+export async function updateGateSettings({ auto_close_duration_seconds, kiosk_input_reset_seconds }) {
     const res = await api.put("/admin/gate-settings", {
-        auto_close_duration_seconds: durationSeconds,
+        auto_close_duration_seconds,
+        kiosk_input_reset_seconds,
     });
     return res.data.data;
 }

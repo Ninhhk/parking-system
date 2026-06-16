@@ -40,10 +40,19 @@ const SessionAuditTable = ({ sessions = [], onRowClick }) => {
                     <thead className="bg-slate-50/75">
                         <tr>
                             <th className="px-6 py-3.5 text-left text-[10px] font-bold font-mono text-slate-500 uppercase tracking-wider">
+                                Session ID
+                            </th>
+                            <th className="px-6 py-3.5 text-left text-[10px] font-bold font-mono text-slate-500 uppercase tracking-wider">
                                 License Plate
                             </th>
                             <th className="px-6 py-3.5 text-left text-[10px] font-bold font-mono text-slate-500 uppercase tracking-wider">
+                                Card ID
+                            </th>
+                            <th className="px-6 py-3.5 text-left text-[10px] font-bold font-mono text-slate-500 uppercase tracking-wider">
                                 Vehicle Type
+                            </th>
+                            <th className="px-6 py-3.5 text-left text-[10px] font-bold font-mono text-slate-500 uppercase tracking-wider">
+                                Monthly
                             </th>
                             <th className="px-6 py-3.5 text-left text-[10px] font-bold font-mono text-slate-500 uppercase tracking-wider">
                                 Lot Name
@@ -70,11 +79,28 @@ const SessionAuditTable = ({ sessions = [], onRowClick }) => {
                                     onClick={() => onRowClick && onRowClick(session)}
                                     className="hover:bg-indigo-50/20 active:bg-indigo-50/30 cursor-pointer transition-colors"
                                 >
+                                    <td className="px-6 py-4 whitespace-nowrap text-xs font-bold font-mono text-slate-800">
+                                        #{session.session_id}
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-xs font-bold font-mono text-slate-800 uppercase">
                                         {session.license_plate || "—"}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-slate-600 uppercase">
+                                        {session.card_uid || "—"}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-slate-600 uppercase">
                                         {session.vehicle_type || "—"}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        {session.is_monthly ? (
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold font-mono tracking-wider uppercase bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                                Monthly
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold font-mono tracking-wider uppercase bg-slate-50 text-slate-500 border border-slate-200">
+                                                Casual
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-slate-600">
                                         {session.lot_name || "—"}

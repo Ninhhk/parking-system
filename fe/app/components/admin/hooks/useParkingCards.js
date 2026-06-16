@@ -9,6 +9,7 @@ import {
     setParkingCardStatus,
     deleteParkingCard,
     fetchParkingLots,
+    updateCardMonthly,
 } from "../../../api/admin.client";
 
 /**
@@ -146,8 +147,25 @@ export function useParkingCards() {
         { key: "card_uid", label: "Card UID" },
         { key: "lot_name", label: "Assigned Lot" },
         { key: "status", label: "Status" },
+        { key: "monthly_status", label: "Monthly" },
+        { key: "monthly_end_date", label: "Expires" },
         { key: "created_at", label: "Created At" },
     ];
+
+    // Toggle monthly subscription on a card
+    const handleToggleMonthly = async (card, endDate) => {
+        const nextMonthly = !card.is_monthly;
+        try {
+            await updateCardMonthly(card.card_uid, {
+                is_monthly: nextMonthly,
+                monthly_end_date: nextMonthly ? (endDate || null) : null,
+            });
+            toast.success(nextMonthly ? "Monthly enabled" : "Monthly disabled");
+            await fetchAll();
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Failed to update monthly status");
+        }
+    };
 
     return {
         cards: filterCards(cards, searchQuery), // filtered list for display
@@ -168,5 +186,6 @@ export function useParkingCards() {
         handleSubmit,
         handleDelete,
         handleToggleStatus,
+        handleToggleMonthly,
     };
 }

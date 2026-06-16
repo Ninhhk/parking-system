@@ -9,7 +9,7 @@ const { pool } = require("../config/db");
  */
 async function getPoolCard(cardUid) {
     const query = `
-        SELECT card_uid, lot_id, status, created_at
+        SELECT card_uid, lot_id, status, created_at, is_monthly, monthly_end_date
         FROM parking_cards
         WHERE card_uid = $1
         LIMIT 1
@@ -39,7 +39,7 @@ async function listPoolCards(q) {
     const filter = typeof q === "string" && q.trim() !== "" ? q.trim() : null;
 
     const query = `
-        SELECT pc.card_uid, pc.lot_id, pc.status, pc.created_at, pl.lot_name
+        SELECT pc.card_uid, pc.lot_id, pc.status, pc.created_at, pc.is_monthly, pc.monthly_end_date, pl.lot_name
         FROM parking_cards pc
         LEFT JOIN parkinglots pl ON pc.lot_id = pl.lot_id
         WHERE $1::text IS NULL
@@ -138,6 +138,29 @@ async function getInventoryCounts() {
     };
 }
 
+/**
+ * Toggle monthly subscription state on a pool card.
+ * Returns the updated row, or null when no card matched (0 rows).
+ *
+ * @param {string} cardUid - Card UID
+ * @param {Object} payload
+ * @param {boolean} payload.is_monthly - Enable or disable monthly
+ * @param {string|null} payload.monthly_end_date - YYYY-MM-DD or null
+ * @returns {Object|null}
+ */
+async function updateMonthly(cardUid, { is_monthly, monthly_end_date }) {
+    const query = `
+        UPDATE parking_cards
+        SET is_monthly = $2,
+            monthly_end_date = $3
+        WHERE card_uid = $1
+        RETURNING card_uid, lot_id, status, created_at, is_monthly, monthly_end_date
+    `;
+
+    const result = await pool.query(query, [cardUid, is_monthly, monthly_end_date || null]);
+    return result.rows[0] || null;
+}
+
 module.exports = {
     getPoolCard,
     markLost,
@@ -147,4 +170,5 @@ module.exports = {
     deletePoolCard,
     hasActiveSession,
     getInventoryCounts,
+    updateMonthly,
 };

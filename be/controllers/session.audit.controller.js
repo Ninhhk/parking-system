@@ -8,7 +8,7 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  */
 exports.getAuditSessions = async (req, res) => {
     try {
-        const { plate, startDate, endDate, vehicleType, lotId } = req.query;
+        const { plate, cardUid, startDate, endDate, vehicleType, lotId, status } = req.query;
         const page = req.query.page ? parseInt(req.query.page, 10) : 1;
         const pageSize = req.query.pageSize ? parseInt(req.query.pageSize, 10) : 20;
 
@@ -18,6 +18,28 @@ exports.getAuditSessions = async (req, res) => {
                 return res.status(422).json({
                     success: false,
                     message: "Invalid license plate query. Must be 1–20 characters and not whitespace-only.",
+                });
+            }
+        }
+
+        // Validate cardUid (optional, but if provided must be 1-100 non-whitespace-only chars)
+        if (cardUid !== undefined) {
+            if (typeof cardUid !== "string" || cardUid.trim().length === 0 || cardUid.length > 100) {
+                return res.status(422).json({
+                    success: false,
+                    message: "Invalid card UID query. Must be 1–100 characters and not whitespace-only.",
+                });
+            }
+        }
+
+        // Validate sessionId (optional, but if provided must be a positive integer)
+        let parsedSessionId;
+        if (req.query.sessionId !== undefined) {
+            parsedSessionId = parseInt(req.query.sessionId, 10);
+            if (isNaN(parsedSessionId) || !Number.isInteger(parsedSessionId) || parsedSessionId < 1) {
+                return res.status(422).json({
+                    success: false,
+                    message: "Session ID must be a positive integer",
                 });
             }
         }
@@ -63,12 +85,24 @@ exports.getAuditSessions = async (req, res) => {
         // Parse lotId to integer if provided
         const parsedLotId = lotId ? parseInt(lotId, 10) : undefined;
 
+        // Validate status (optional, must be one of allowed values)
+        const ALLOWED_STATUSES = ["active", "completed", "lost_ticket"];
+        if (status !== undefined && !ALLOWED_STATUSES.includes(status)) {
+            return res.status(422).json({
+                success: false,
+                message: `Invalid status. Must be one of: ${ALLOWED_STATUSES.join(", ")}`,
+            });
+        }
+
         const result = await getAuditSessions({
             plate,
+            sessionId: parsedSessionId,
+            cardUid,
             startDate,
             endDate,
             vehicleType,
             lotId: parsedLotId,
+            status,
             page,
             pageSize,
         });

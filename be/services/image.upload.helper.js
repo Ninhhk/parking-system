@@ -174,4 +174,59 @@ async function uploadCheckoutImage(base64Image, { lotId, sessionId }) {
     }
 }
 
-module.exports = { uploadCheckinImage, uploadCheckoutImage, isBase64Image, parseBase64Image };
+/**
+ * Uploads a lost-ticket guest ID image to MinIO with 5s timeout and graceful failure.
+ *
+ * @param {string} base64Image - Base64-encoded image (raw or data URI)
+ * @param {Object} params
+ * @param {string} params.sessionId - Session ID (as string)
+ * @returns {Promise<string|null>} Object key on success, null on failure
+ */
+async function uploadLostTicketImage(base64Image, { sessionId }) {
+    if (!isMinioConfigured) {
+        return null;
+    }
+
+    if (!base64Image || typeof base64Image !== "string") {
+        return null;
+    }
+
+    try {
+        const parsed = parseBase64Image(base64Image);
+        const buffer = Buffer.from(parsed.raw, "base64");
+
+        if (buffer.length === 0) {
+            return null;
+        }
+        if (buffer.length > MAX_IMAGE_SIZE) {
+            console.warn(`[ImageUpload] Lost-ticket image exceeds 10 MB for session ${sessionId}`);
+            return null;
+        }
+
+        const uploadPromise = minioService.uploadImage(buffer, {
+            lotId: "lost-tickets",
+            sessionId: String(sessionId),
+            direction: "id",
+            ext: parsed.ext,
+        });
+
+        let timer;
+        const timeoutPromise = new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error("Upload timeout")), UPLOAD_TIMEOUT_MS);
+        });
+
+        try {
+            const objectKey = await Promise.race([uploadPromise, timeoutPromise]);
+            clearTimeout(timer);
+            return objectKey;
+        } catch (err) {
+            clearTimeout(timer);
+            throw err;
+        }
+    } catch (err) {
+        console.error(`[ImageUpload] Lost-ticket image failed for session ${sessionId}: ${err.message}`);
+        return null;
+    }
+}
+
+module.exports = { uploadCheckinImage, uploadCheckoutImage, uploadLostTicketImage, isBase64Image, parseBase64Image };

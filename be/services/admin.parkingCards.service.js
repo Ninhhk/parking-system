@@ -47,3 +47,11 @@ exports.deleteCard = async (card_uid) => {
     }
     return deleted;
 };
+
+exports.updateMonthly = async (card_uid, { is_monthly, monthly_end_date }) => {
+    const updated = await parkingCardsRepo.updateMonthly(card_uid, { is_monthly, monthly_end_date });
+    if (!updated) {
+        throw createError(404, "Card not found");
+    }
+    return updated;
+};

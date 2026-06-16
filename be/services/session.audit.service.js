@@ -17,7 +17,7 @@ function deriveSessionStatus(session) {
  * @param {Object} params - Filter and pagination parameters
  * @returns {Promise<Object>} { sessions, pagination } or throws on validation error
  */
-async function getAuditSessions({ plate, startDate, endDate, vehicleType, lotId, page = 1, pageSize = 20 }) {
+async function getAuditSessions({ plate, sessionId, cardUid, startDate, endDate, vehicleType, lotId, status, page = 1, pageSize = 20 }) {
     // Validate lot existence when lotId is provided
     if (lotId) {
         const exists = await sessionAuditRepo.lotExists(lotId);
@@ -30,10 +30,13 @@ async function getAuditSessions({ plate, startDate, endDate, vehicleType, lotId,
 
     const { rows, totalCount } = await sessionAuditRepo.findSessions({
         plate,
+        sessionId,
+        cardUid,
         startDate,
         endDate,
         vehicleType,
         lotId,
+        status,
         page,
         pageSize,
     });
@@ -49,7 +52,9 @@ async function getAuditSessions({ plate, startDate, endDate, vehicleType, lotId,
             return {
                 session_id: row.session_id,
                 license_plate: row.license_plate,
+                card_uid: row.card_uid,
                 vehicle_type: row.vehicle_type,
+                is_monthly: row.is_monthly,
                 lot_name: row.lot_name,
                 time_in: row.time_in,
                 time_out: row.time_out,

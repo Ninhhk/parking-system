@@ -6,7 +6,6 @@ const adminController = require("../controllers/admin.controller");
 const adminUsersController = require("../controllers/admin.users.controller");
 const adminLotsController = require("../controllers/admin.lots.controller");
 const authMiddleware = require("../middlewares/auth.middleware");
-const adminMonthlySubsController = require("../controllers/admin.monthlysubs.controller");
 const adminPaymentController = require("../controllers/admin.payment.controller");
 const adminFeeConfigController = require("../controllers/admin.feeConfig.controller");
 const adminNotiController = require("../controllers/admin.noti.controller");
@@ -15,6 +14,8 @@ const adminAnalyticsController = require("../controllers/admin.analytics.control
 const adminCameraController = require("../controllers/admin.camera.controller");
 const adminParkingCardsController = require("../controllers/admin.parkingCards.controller");
 const gateSettingsController = require("../controllers/admin.gateSettings.controller");
+const checkoutSettingsController = require("../controllers/admin.checkoutSettings.controller");
+const sessionAuditController = require("../controllers/session.audit.controller");
 
 const { hasPermission } = require("../middlewares/auth.middleware");
 
@@ -23,6 +24,9 @@ router.use(authMiddleware.isAuthenticated, authMiddleware.hasRole(["admin"]));
 
 // Dashboard
 router.get("/", adminController.getDashboard);
+
+// Session Audit — read-only historical session viewer
+router.get("/audit/sessions", sessionAuditController.getAuditSessions);
 
 // Users Management
 router.get("/users", adminUsersController.getAllUsers);
@@ -46,11 +50,8 @@ router.get("/lost-tickets", adminLostTicketController.getAllLostTicketReports);
 router.get("/lost-tickets/:id", adminLostTicketController.getLostTicketReportById);
 router.delete("/lost-tickets/:id", adminLostTicketController.deleteLostTicketReport);
 
-// Monthly Subs Management
-router.get("/monthly-subs", adminMonthlySubsController.getAllMonthlySubs);
-router.post("/monthly-subs", adminMonthlySubsController.createMonthlySub);
-router.put("/monthly-subs/:id", adminMonthlySubsController.updateMonthlySub);
-router.delete("/monthly-subs/:id", adminMonthlySubsController.deleteMonthlySub);
+// Monthly Subs Management (legacy — kept for backward compatibility, reads from monthlysubs table)
+// New monthly management is via Card Pool PATCH /parking-cards/:card_uid/monthly
 
 // Payments Management
 router.get("/payments", adminPaymentController.getAllPayments);
@@ -94,11 +95,16 @@ router.delete("/cameras/:camera_id/modules/:module_type", adminCameraController.
 router.get("/gate-settings", gateSettingsController.getGateSettings);
 router.put("/gate-settings", gateSettingsController.updateGateSettings);
 
+// Checkout Settings
+router.get("/checkout-settings", checkoutSettingsController.getCheckoutSettings);
+router.put("/checkout-settings", checkoutSettingsController.updateCheckoutSettings);
+
 // Card Pool Management
 router.get("/parking-cards", adminParkingCardsController.listCards);
 router.get("/parking-cards/inventory", adminParkingCardsController.getInventory);
 router.post("/parking-cards", adminParkingCardsController.createCard);
 router.patch("/parking-cards/:card_uid/status", adminParkingCardsController.setStatus);
 router.delete("/parking-cards/:card_uid", adminParkingCardsController.deleteCard);
+router.patch("/parking-cards/:card_uid/monthly", adminParkingCardsController.updateMonthly);
 
 module.exports = router;

@@ -150,6 +150,8 @@ describe("session.audit.controller", () => {
 
             expect(service.getAuditSessions).toHaveBeenCalledWith({
                 plate: "51F",
+                sessionId: undefined,
+                cardUid: undefined,
                 startDate: undefined,
                 endDate: undefined,
                 vehicleType: undefined,

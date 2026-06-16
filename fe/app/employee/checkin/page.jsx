@@ -294,7 +294,7 @@ export default function UnifiedCheckinPage() {
                     entry_lane_id: LANE_ID,
                     metadata_in: buildMetadata({ casual: false, noCameraEvidence }),
                 });
-                setResultDetail(`Welcome, ${descriptor.sub.owner_name}`);
+                setResultDetail(descriptor.sub.owner_name ? `Welcome, ${descriptor.sub.owner_name}` : "Monthly check-in OK");
             } else {
                 const payload = {
                     vehicle_type: descriptor.resolvedType,
@@ -376,8 +376,17 @@ export default function UnifiedCheckinPage() {
             // Active subscription found → subscriber path
             setEntryType("subscriber");
             setSubscription(sub);
-            setVehicleType(sub.vehicle_type);
-            await runSubmit({ kind: "subscriber", cardUid, sub });
+
+            // Resolve vehicle type: sub may provide it (legacy), else lane-fixed, else operator picks
+            const resolvedType = sub.vehicle_type || laneConfig?.vehicle_type || null;
+            if (!resolvedType) {
+                setVehicleType(null);
+                setPendingVehiclePick(true);
+                setKioskState(KIOSK_STATES.IDLE);
+                return;
+            }
+            setVehicleType(resolvedType);
+            await runSubmit({ kind: "subscriber", cardUid, sub: { ...sub, vehicle_type: resolvedType } });
         } catch (error) {
             clearTimeout(timeoutId);
 

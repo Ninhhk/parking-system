@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useEffect } from "react";
 
 const CARD_UID_REGEX = /^[A-Za-z0-9-]{1,100}$/;
 
@@ -12,8 +12,16 @@ export function isValidCardUid(value) {
 }
 
 export default function ReaderPanel({ value, onChange, disabled, onSubmit }) {
+    const inputRef = useRef(null);
     const isValid = useMemo(() => isValidCardUid(value), [value]);
     const submitDisabled = disabled || !isValid;
+
+    // Re-focus input whenever value is cleared and input is not disabled
+    useEffect(() => {
+        if (!value && !disabled) {
+            inputRef.current?.focus();
+        }
+    }, [value, disabled]);
 
     function handleKeyDown(e) {
         if (e.key === "Enter") {
@@ -46,6 +54,7 @@ export default function ReaderPanel({ value, onChange, disabled, onSubmit }) {
                     </label>
                     <div className="relative">
                         <input
+                             ref={inputRef}
                              id="rfid-card-uid"
                              name="card_uid"
                              type="text"
@@ -54,6 +63,7 @@ export default function ReaderPanel({ value, onChange, disabled, onSubmit }) {
                              onKeyDown={handleKeyDown}
                              disabled={disabled}
                              required
+                             autoFocus
                              maxLength={100}
                              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-lg font-mono font-bold tracking-widest text-slate-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-inner placeholder-gray-300 transition-all text-center md:text-left disabled:opacity-50"
                              placeholder="CARD-0000"
