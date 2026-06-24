@@ -54,6 +54,16 @@ export async function confirmCheckout(sessionId, paymentMethod, imageOutBase64) 
     return res.data;
 }
 
+// One-tap monthly/subscription checkout: finalizes a fee-waived monthly session
+// directly (no QR, no cash) and stores the exit image. Server re-validates that the
+// session is monthly and owes nothing before finalizing.
+export async function confirmMonthlyCheckout(sessionId, imageOutBase64) {
+    const res = await api.post(`/employee/parking/exit/${sessionId}/monthly-checkout`, {
+        image_out_base64: imageOutBase64 || undefined,
+    });
+    return res.data;
+}
+
 // Upload the exit image for a CARD/QR checkout finalized server-side by the webhook.
 // The webhook cannot access the operator's live camera, so the browser uploads it here.
 export async function uploadExitImage(sessionId, imageOutBase64) {
@@ -94,6 +104,15 @@ export async function reportLostTicket({ session_id, guest_identification, guest
         guest_phone,
     });
     return res.data;
+}
+
+// Fetch currently parked (active) vehicles for the employee's lot
+export async function fetchActiveVehicles({ plate, vehicleType, page = 1, pageSize = 20 } = {}) {
+    const params = { status: "active", page, pageSize };
+    if (plate) params.plate = plate;
+    if (vehicleType) params.vehicleType = vehicleType;
+    const res = await api.get("/employee/audit/sessions", { params });
+    return res.data.data;
 }
 
 // Fetch user profile

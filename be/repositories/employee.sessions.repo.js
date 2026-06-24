@@ -1,5 +1,5 @@
 const { pool } = require("../config/db");
-const feeConfigRepo = require("./admin.feeConfig.repo");
+const newFeeConfigRepo = require("./feeConfig.repo");
 const { DEFAULT_PENALTY_FEE, UNKNOWN_GUEST_IDENTIFIER } = require("../config/constants");
 
 let parkingSessionsColumnsCache = null;
@@ -146,47 +146,21 @@ exports.getSession = async (sessionId) => {
     return result.rows[0];
 };
 
-exports.checkMonthlySub = async (license_plate, vehicle_type, current_date) => {
-    const query = `
-        SELECT * FROM MonthlySubs
-        WHERE license_plate = $1
-          AND vehicle_type  = $2
-          AND start_date   <= $3
-          AND end_date     >= $3
-    `;
-
-    const result = await pool.query(query, [license_plate, vehicle_type, current_date]);
-    return result.rows[0];
-};
-
-// card_uid column was added to MonthlySubs via db/init/010_add_card_uid_to_monthly_subs.sql
-exports.checkMonthlySubByCard = async (card_uid, vehicle_type, current_date) => {
-    const query = `
-        SELECT * FROM MonthlySubs
-        WHERE card_uid    = $1
-          AND vehicle_type = $2
-          AND start_date  <= $3
-          AND end_date    >= $3
-    `;
-    const result = await pool.query(query, [card_uid, vehicle_type, current_date]);
-    return result.rows[0];
-};
-
 exports.createPendingPayment = async (paymentData) => {
-    const { session_id, sub_id, total_amount } = paymentData;
+    const { session_id, total_amount } = paymentData;
 
-    // Changed "Payments" to "Payment" to match your database schema
+    // NOTE: this function is dead code (never called by live paths).
+    // Kept for reference; sub_id column was removed by migration 023.
     const query = `
         INSERT INTO Payment (
             session_id,
-            sub_id,
             payment_method,
             total_amount
-        ) VALUES ($1, $2, 'PENDING', $3)
+        ) VALUES ($1, 'PENDING', $2)
         RETURNING *
     `;
 
-    const result = await pool.query(query, [session_id, sub_id || null, total_amount]);
+    const result = await pool.query(query, [session_id, total_amount]);
 
     return result.rows[0];
 };
@@ -286,23 +260,21 @@ exports.createAndConfirmPayment = async (paymentData) => {
     try {
         await client.query("BEGIN");
 
-        const { session_id, sub_id, total_amount, payment_method, is_lost } = paymentData;
+        const { session_id, total_amount, payment_method, is_lost } = paymentData;
 
         // Create the payment
         const createPaymentQuery = `
             INSERT INTO Payment (
                 session_id,
-                sub_id,
                 payment_method,
                 total_amount,
                 payment_date
-            ) VALUES ($1, $2, $3, $4, NOW())
+            ) VALUES ($1, $2, $3, NOW())
             RETURNING *
         `;
 
         const paymentResult = await client.query(createPaymentQuery, [
             session_id,
-            sub_id || null,
             payment_method,
             total_amount,
         ]);
@@ -410,7 +382,7 @@ exports.getActiveSessionsForOps = async ({ laneId, q, page, pageSize } = {}, cli
     const offsetIndex = params.length;
 
     const result = await client.query(
-        `SELECT ps.*
+        `SELECT ps.*, COUNT(*) OVER() AS total_count
          FROM ParkingSessions ps
          WHERE ${conditions.join(" AND ")}
          ORDER BY ps.time_in DESC, ps.session_id DESC
@@ -419,7 +391,17 @@ exports.getActiveSessionsForOps = async ({ laneId, q, page, pageSize } = {}, cli
         params
     );
 
-    return result.rows;
+    const totalCount = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+
+    return {
+        rows: result.rows.map(({ total_count, ...row }) => row),
+        pagination: {
+            page: normalizedPage,
+            pageSize: normalizedPageSize,
+            totalCount,
+            totalPages: Math.ceil(totalCount / normalizedPageSize),
+        },
+    };
 };
 
 // Employee reports a lost ticket (standalone, not during checkout)
@@ -438,10 +420,10 @@ exports.reportLostTicket = async ({ session_id, guest_identification, guest_phon
     }
 
     // Assume ticket_type is 'daily' unless you have a field for it
-    const ticket_type = session.is_monthly ? "monthly" : "daily";
     const vehicle_type = session.vehicle_type;
-    // Get penalty fee from FeeConfigs
-    const penalty_fee = await feeConfigRepo.getPenaltyFee(ticket_type, vehicle_type);
+    // Get penalty fee from the active fee_config_versions (same source as fee engine checkout)
+    const config = await newFeeConfigRepo.getActiveConfig(vehicle_type, session.time_in);
+    const penalty_fee = config ? config.penalty_fee : DEFAULT_PENALTY_FEE;
     const query = `
         INSERT INTO LostTicketReport (
             session_id,

@@ -14,13 +14,30 @@ function deriveSessionStatus(session) {
 /**
  * Fetches paginated, filtered audit sessions with presigned image URLs.
  *
+ * When the caller is an employee (not admin), results are forced to their managed
+ * lot — any client-supplied lotId is ignored so the scope can't be bypassed.
+ *
  * @param {Object} params - Filter and pagination parameters
  * @returns {Promise<Object>} { sessions, pagination } or throws on validation error
  */
-async function getAuditSessions({ plate, sessionId, cardUid, startDate, endDate, vehicleType, lotId, status, page = 1, pageSize = 20 }) {
-    // Validate lot existence when lotId is provided
-    if (lotId) {
-        const exists = await sessionAuditRepo.lotExists(lotId);
+async function getAuditSessions({ plate, sessionId, cardUid, startDate, endDate, vehicleType, lotId, status, page = 1, pageSize = 20, requesterRole, requesterId }) {
+    // Employee callers are scoped to the lot they manage; ignore any provided lotId.
+    let effectiveLotId = lotId;
+    if (requesterRole === "employee") {
+        const managedLotId = await sessionAuditRepo.getManagedLotId(requesterId);
+        // No managed lot → no sessions to show.
+        if (!managedLotId) {
+            return {
+                sessions: [],
+                pagination: { page, pageSize, totalCount: 0, totalPages: 0 },
+            };
+        }
+        effectiveLotId = managedLotId;
+    }
+
+    // Validate lot existence when lotId is provided (admin-supplied filter)
+    if (effectiveLotId) {
+        const exists = await sessionAuditRepo.lotExists(effectiveLotId);
         if (!exists) {
             const error = new Error("Parking lot not found");
             error.status = 422;
@@ -35,7 +52,7 @@ async function getAuditSessions({ plate, sessionId, cardUid, startDate, endDate,
         startDate,
         endDate,
         vehicleType,
-        lotId,
+        lotId: effectiveLotId,
         status,
         page,
         pageSize,

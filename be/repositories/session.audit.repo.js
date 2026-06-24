@@ -63,3 +63,14 @@ exports.lotExists = async (lotId) => {
     );
     return result.rowCount > 0;
 };
+
+/**
+ * Resolve the lot_id managed by a given user, or null if they manage none.
+ */
+exports.getManagedLotId = async (userId) => {
+    const result = await pool.query(
+        "SELECT lot_id FROM parkinglots WHERE managed_by = $1",
+        [userId]
+    );
+    return result.rows[0]?.lot_id ?? null;
+};

@@ -1,0 +1,48 @@
+[
+    {
+        "name": "Monthly card entry",
+        "gateway_id": "gw-edge-1",
+        "lane_id": "lane-card-lpd-1",
+        "lot_id": "lot-1",
+        "trigger_type": "IC_CARD",
+        "vehicle_type": "bike",
+        "trigger_value": "CARD-001"
+    },
+    {
+        "name": "Casual visitor entry (LPD)",
+        "gateway_id": "gw-edge-1",
+        "lane_id": "lane-concurrent-1",
+        "lot_id": "lot-1",
+        "trigger_type": "LPD",
+        "vehicle_type": "bike",
+        "plate": "29A-12345"
+    },
+    {
+        "name": "UHF tag entry",
+        "gateway_id": "gw-edge-1",
+        "lane_id": "lane-uhf-only-1",
+        "lot_id": "lot-1",
+        "trigger_type": "UHF_TAG",
+        "vehicle_type": "bike",
+        "trigger_value": "UHF-EPC-001"
+    },
+    {
+        "name": "Exit via card",
+        "gateway_id": "gw-edge-1",
+        "lane_id": "lane-exit-1",
+        "lot_id": "lot-1",
+        "trigger_type": "IC_CARD",
+        "vehicle_type": "bike",
+        "trigger_value": "CARD-001"
+    },
+    {
+        "name": "LPD entry with image",
+        "gateway_id": "gw-edge-1",
+        "lane_id": "lane-card-lpd-1",
+        "lot_id": "lot-1",
+        "trigger_type": "LPD",
+        "vehicle_type": "bike",
+        "plate": "30A-98765",
+        "image_path": "samples/plate.jpg"
+    }
+]

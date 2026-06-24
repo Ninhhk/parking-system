@@ -34,8 +34,15 @@ const formatDateTime = (value) => {
 const extractRows = (payload) => {
     if (Array.isArray(payload)) return payload;
     if (Array.isArray(payload?.rows)) return payload.rows;
+    if (Array.isArray(payload?.events)) return payload.events;
+    if (Array.isArray(payload?.sessions)) return payload.sessions;
     if (Array.isArray(payload?.items)) return payload.items;
     return [];
+};
+
+const extractPagination = (payload) => {
+    if (payload?.pagination) return payload.pagination;
+    return null;
 };
 
 function EdgeOpsContent() {
@@ -55,6 +62,7 @@ function EdgeOpsContent() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [retryingId, setRetryingId] = useState("");
+    const [eventsPagination, setEventsPagination] = useState(null);
     const pollRunnerRef = useRef(null);
     const toastRef = useRef(toast);
 
@@ -105,6 +113,7 @@ function EdgeOpsContent() {
 
                 setEvents(extractRows(eventsPayload));
                 setActiveSessions(extractRows(sessionsPayload));
+                setEventsPagination(extractPagination(eventsPayload));
             } catch (error) {
                 toastRef.current.error(error.response?.data?.message || "Failed to load edge ops data");
             } finally {
@@ -201,15 +210,35 @@ function EdgeOpsContent() {
                         placeholder="Search plate/tag/card"
                         className="border border-gray-300 rounded-md px-3 py-2 text-sm"
                     />
-
-                    <input
-                        type="number"
-                        min="1"
-                        value={filters.page}
-                        onChange={(e) => updateFilter("page", Number(e.target.value) || 1)}
-                        className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    />
                 </div>
+
+                {/* Pagination controls */}
+                {eventsPagination && eventsPagination.totalCount > 0 && (
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                        <span className="text-xs text-gray-500">
+                            {eventsPagination.totalCount} event(s)
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => updateFilter("page", Math.max(1, (Number(filters.page) || 1) - 1))}
+                                disabled={(Number(filters.page) || 1) <= 1}
+                                className="px-3 py-1 text-xs border border-gray-200 rounded bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Previous
+                            </button>
+                            <span className="text-xs text-gray-600">
+                                Page {eventsPagination.page} of {eventsPagination.totalPages}
+                            </span>
+                            <button
+                                onClick={() => updateFilter("page", Math.min(eventsPagination.totalPages, (Number(filters.page) || 1) + 1))}
+                                disabled={(Number(filters.page) || 1) >= eventsPagination.totalPages}
+                                className="px-3 py-1 text-xs border border-gray-200 rounded bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-6">

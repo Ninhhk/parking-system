@@ -66,6 +66,7 @@ router.post("/parking/entry/rfid", sessionsController.checkInByRfid);
 router.get("/parking/exit/by-card/:card_uid", sessionsController.findActiveSessionByCard);
 router.get("/parking/exit/:session_id", sessionsController.initiateCheckout);
 router.post("/parking/exit/confirm", sessionsController.confirmCheckout);
+router.post("/parking/exit/:session_id/monthly-checkout", sessionsController.confirmMonthlyCheckout);
 router.post("/parking/exit/:session_id/payment-intents", employeePaymentController.createIntent);
 router.post(
     "/parking/exit/:session_id/payment-intents/regenerate",

@@ -145,6 +145,7 @@ describe("session.audit.controller", () => {
             service.getAuditSessions.mockResolvedValue(mockResult);
 
             req.query = { plate: "51F" };
+            req.session = { user: { role: "admin", user_id: 1 } };
 
             await controller.getAuditSessions(req, res);
 
@@ -158,6 +159,8 @@ describe("session.audit.controller", () => {
                 lotId: undefined,
                 page: 1,
                 pageSize: 20,
+                requesterRole: "admin",
+                requesterId: 1,
             });
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith({

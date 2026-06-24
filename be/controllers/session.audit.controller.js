@@ -105,6 +105,8 @@ exports.getAuditSessions = async (req, res) => {
             status,
             page,
             pageSize,
+            requesterRole: req.session?.user?.role,
+            requesterId: req.session?.user?.user_id,
         });
 
         return res.status(200).json({

@@ -1,6 +1,7 @@
 jest.mock("../../repositories/session.audit.repo", () => ({
     lotExists: jest.fn(),
     findSessions: jest.fn(),
+    getManagedLotId: jest.fn(),
 }));
 
 jest.mock("../../services/minio.service", () => ({
@@ -157,6 +158,60 @@ describe("session.audit.service", () => {
                 totalCount: 0,
                 totalPages: 0,
             });
+        });
+    });
+
+    // --- employee lot scoping ---
+
+    describe("getAuditSessions employee lot scoping", () => {
+        it("forces an employee's results to their managed lot, ignoring a supplied lotId", async () => {
+            sessionAuditRepo.getManagedLotId.mockResolvedValue(7);
+            sessionAuditRepo.lotExists.mockResolvedValue(true);
+            sessionAuditRepo.findSessions.mockResolvedValue({ rows: [], totalCount: 0 });
+
+            await getAuditSessions({
+                lotId: 999,
+                page: 1,
+                pageSize: 20,
+                requesterRole: "employee",
+                requesterId: 42,
+            });
+
+            expect(sessionAuditRepo.getManagedLotId).toHaveBeenCalledWith(42);
+            expect(sessionAuditRepo.findSessions).toHaveBeenCalledWith(
+                expect.objectContaining({ lotId: 7 })
+            );
+        });
+
+        it("returns empty results when an employee manages no lot", async () => {
+            sessionAuditRepo.getManagedLotId.mockResolvedValue(null);
+
+            const result = await getAuditSessions({
+                page: 1,
+                pageSize: 20,
+                requesterRole: "employee",
+                requesterId: 42,
+            });
+
+            expect(result.sessions).toEqual([]);
+            expect(result.pagination.totalCount).toBe(0);
+            expect(sessionAuditRepo.findSessions).not.toHaveBeenCalled();
+        });
+
+        it("does not scope by lot for admin callers", async () => {
+            sessionAuditRepo.findSessions.mockResolvedValue({ rows: [], totalCount: 0 });
+
+            await getAuditSessions({
+                page: 1,
+                pageSize: 20,
+                requesterRole: "admin",
+                requesterId: 1,
+            });
+
+            expect(sessionAuditRepo.getManagedLotId).not.toHaveBeenCalled();
+            expect(sessionAuditRepo.findSessions).toHaveBeenCalledWith(
+                expect.objectContaining({ lotId: undefined })
+            );
         });
     });
 });

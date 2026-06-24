@@ -126,7 +126,7 @@ describe("Feature: minio-image-storage, Property 3: Missing required parameters 
     });
 
     it("error message contains 'direction' when direction is invalid", () => {
-        const invalidDirection = fc.string().filter(s => s !== "in" && s !== "out");
+        const invalidDirection = fc.string().filter(s => s !== "in" && s !== "out" && s !== "id");
 
         fc.assert(
             fc.property(

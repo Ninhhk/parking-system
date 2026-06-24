@@ -6,6 +6,7 @@ const paymentLedgerRepo = require("../repositories/paymentLedger.repo");
 const paymentIntentService = require("./paymentIntent.service");
 const constants = require("../config/constants");
 const { calculateAndValidateFee } = require("./feeCalculation.service");
+const { setState } = require("./gate.state.service");
 
 exports.createIntent = async ({ sessionId, paymentMethod, requestedAmount, forceNew = false, idempotencyKey }) => {
     if (!constants.PAYMENT_INTENT_V2_ENABLED) {
@@ -143,8 +144,11 @@ exports.getPaymentStatus = async ({ sessionId }) => {
     };
 };
 
-exports.confirmCashCheckout = async ({ sessionId, totalAmount, isLost, paymentMethod = "CASH" }) => {
-    if (paymentMethod !== "CASH") {
+exports.settleCheckout = async ({ sessionId, totalAmount, isLost, paymentMethod = "CASH" }) => {
+    // Settled-at-terminal methods: CASH (operator collects) and MONTHLY (subscription
+    // waives the fee, totalAmount = 0). CARD is excluded — it is finalized asynchronously
+    // by the PayOS webhook, never here.
+    if (paymentMethod !== "CASH" && paymentMethod !== "MONTHLY") {
         throw new Error("CARD must be finalized by webhook");
     }
 
@@ -163,7 +167,7 @@ exports.confirmCashCheckout = async ({ sessionId, totalAmount, isLost, paymentMe
                 {
                     sessionId,
                     subId: null,
-                    paymentMethod: "CASH",
+                    paymentMethod,
                     totalAmount,
                 },
                 client
@@ -276,6 +280,10 @@ exports.finalizeFromWebhook = async (payload) => {
             }
 
             await client.query("COMMIT");
+            // Trigger gate light for exit after successful card payment
+            if (finalized && session.entry_lane_id) {
+                setState(session.entry_lane_id, { status: "OPEN", plate: session.license_plate || "", message: "Tạm biệt" });
+            }
             return { ok: true, replay: !finalized };
         } catch (error) {
             await client.query("ROLLBACK");

@@ -17,7 +17,6 @@ describe("paymentAttempt repo intent relation contracts", () => {
     it("createAttempt accepts intentId and writes intent_id with CREATED status", async () => {
         await paymentAttemptRepo.createAttempt({
             sessionId: 1,
-            subId: null,
             intentId: 77,
             provider: "PAYOS",
             paymentMethod: "CARD",
@@ -26,7 +25,7 @@ describe("paymentAttempt repo intent relation contracts", () => {
 
         expect(mockPoolQuery).toHaveBeenCalledWith(
             expect.stringContaining("intent_id"),
-            [1, null, 77, "PAYOS", "CARD", 12000]
+            [1, 77, "PAYOS", "CARD", 12000]
         );
         expect(mockPoolQuery.mock.calls[0][0]).toContain("'CREATED'");
     });
@@ -34,7 +33,6 @@ describe("paymentAttempt repo intent relation contracts", () => {
     it("createAttempt supports null intentId for legacy checkout flow", async () => {
         await paymentAttemptRepo.createAttempt({
             sessionId: 1,
-            subId: null,
             intentId: null,
             provider: "PAYOS",
             paymentMethod: "CARD",
@@ -43,7 +41,7 @@ describe("paymentAttempt repo intent relation contracts", () => {
 
         expect(mockPoolQuery).toHaveBeenCalledWith(
             expect.stringContaining("INSERT INTO payment_attempts"),
-            [1, null, null, "PAYOS", "CARD", 12000]
+            [1, null, "PAYOS", "CARD", 12000]
         );
     });
 
@@ -87,14 +85,14 @@ describe("paymentAttempt repo intent relation contracts", () => {
         );
     });
 
-    it("markPaidByOrderCode updates only pending attempts (CAS guard)", async () => {
+    it("markPaidByOrderCode updates only pending/expired attempts (CAS guard)", async () => {
         await paymentAttemptRepo.markPaidByOrderCode({
             providerOrderCode: "oc_1",
             providerTransactionId: "tx_1",
             webhookPayload: { ok: true },
         });
 
-        expect(mockPoolQuery.mock.calls[0][0]).toContain("AND status = 'PENDING'");
+        expect(mockPoolQuery.mock.calls[0][0]).toContain("AND status IN ('PENDING', 'EXPIRED')");
     });
 
     it("markFailedOrExpired updates PENDING or CREATED attempts", async () => {

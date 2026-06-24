@@ -1,7 +1,6 @@
 const sessionsRepo = require("../repositories/employee.sessions.repo");
 const feeConfigRepo = require("../repositories/admin.feeConfig.repo");
 const lotsRepo = require("../repositories/admin.lots.repo");
-const { getToday } = require("../utils/date");
 const { calculateAndValidateFee } = require("../services/feeCalculation.service");
 const {
     LICENSE_PLATE_REGEX,
@@ -14,6 +13,7 @@ const { uploadCheckinImage, uploadCheckoutImage, uploadLostTicketImage, isBase64
 const { getPresignedUrl } = require("../services/minio.service");
 const parkingCardsRepo = require("../repositories/parkingCards.repo");
 const { evaluateIssuedCardEntry, deriveEffectiveMonthly } = require("../services/issuedCardEntry");
+const { setState } = require("../services/gate.state.service");
 
 // Vehicle Entry - Create a new parking session
 exports.checkInVehicle = async (req, res) => {
@@ -97,16 +97,10 @@ exports.checkInVehicle = async (req, res) => {
             }
         }
 
-        // Check if vehicle has a monthly subscription
-        // Card-based monthly takes priority (new model), then fall back to plate-based (legacy)
+        // Check if vehicle has a monthly subscription (card-based only, new model)
         let is_monthly = false;
         if (poolCard) {
             is_monthly = deriveEffectiveMonthly(poolCard);
-        }
-        if (!is_monthly && license_plate) {
-            const today = getToday();
-            const monthlyPass = await sessionsRepo.checkMonthlySub(license_plate, vehicle_type, today);
-            is_monthly = !!monthlyPass;
         }
 
         // Create new session with the employee's assigned lot
@@ -198,6 +192,11 @@ exports.checkInVehicle = async (req, res) => {
             //qr_code: `PK-${newSession.session_id}-${Date.now()}`, // Simplified QR code data
         };
 
+        // Trigger gate light if lane is known
+        if (entry_lane_id) {
+            setState(entry_lane_id, { status: "OPEN", plate: license_plate || "", message: "Mời vào" });
+        }
+
         res.status(201).json({
             success: true,
             message: "Vehicle checked in successfully",
@@ -267,14 +266,9 @@ exports.checkInByRfid = async (req, res) => {
         let newSession;
         let hasBase64Image = isBase64Image(image_in_url);
         try {
-            // Card-based monthly takes priority (new model), then fall back to card→plate legacy lookup
+            // Card-based monthly (new model) — single path, no legacy fallback
             const poolCard = await parkingCardsRepo.getPoolCard(card_uid);
             let is_monthly = deriveEffectiveMonthly(poolCard);
-            if (!is_monthly) {
-                const today = getToday();
-                const monthlyPass = await sessionsRepo.checkMonthlySubByCard(card_uid, vehicle_type, today);
-                is_monthly = !!monthlyPass;
-            }
             const optionalFields = { etag_epc, entry_lane_id, metadata_in };
             // Only pass image_in_url if it's NOT base64 (backward compat for URLs)
             if (image_in_url !== undefined && !hasBase64Image) {
@@ -340,6 +334,11 @@ exports.checkInByRfid = async (req, res) => {
             lot_id: newSession.lot_id,
             lot_name: parkingLot.lot_name,
         };
+
+        // Trigger gate light if lane is known
+        if (entry_lane_id) {
+            setState(entry_lane_id, { status: "OPEN", plate: license_plate || "", message: "Mời vào" });
+        }
 
         res.status(201).json({
             success: true,
@@ -542,7 +541,7 @@ exports.confirmCheckout = async (req, res) => {
             });
         }
 
-        const cashResult = await checkoutService.confirmCashCheckout({
+        const cashResult = await checkoutService.settleCheckout({
             sessionId: Number(session_id),
             totalAmount: feeResult.totalAmount,
             isLost: session.is_lost,
@@ -557,6 +556,11 @@ exports.confirmCheckout = async (req, res) => {
         } else {
             const freshSession = await sessionsRepo.getSession(session_id);
             timeOut = freshSession ? freshSession.time_out : null;
+        }
+
+        // Trigger gate light for exit
+        if (session.entry_lane_id) {
+            setState(session.entry_lane_id, { status: "OPEN", plate: session.license_plate || "", message: "Tạm biệt" });
         }
 
         res.status(200).json({
@@ -711,6 +715,19 @@ exports.deleteLostTicket = async (req, res) => {
         }
         // Use repository method instead of direct pool access (DIP compliance)
         await sessionsRepo.clearLostTicketStatus(session_id);
+
+        // Reset pool card back to available if it was marked lost (symmetric with reportLostTicket).
+        // Best-effort: failure is logged but does not fail the request.
+        try {
+            const session = await sessionsRepo.getSession(session_id);
+            const card_uid = session && session.card_uid ? session.card_uid : null;
+            if (card_uid) {
+                await parkingCardsRepo.markAvailableIfLost(card_uid);
+            }
+        } catch (cardErr) {
+            console.error(JSON.stringify({ event: "pool_card_reset_failed", session_id }));
+        }
+
         res.status(200).json({ success: true, message: "Lost ticket report deleted" });
     } catch (error) {
         res.status(500).json({ success: false, message: "Internal server error" });
@@ -775,6 +792,111 @@ exports.uploadExitImage = async (req, res) => {
         res.status(200).json({ success: true, message: "Exit image stored" });
     } catch (error) {
         console.error("Upload exit image error:", error);
+        res.status(500).json({ success: false, message: "Internal server error" });
+    }
+};
+
+// Vehicle Exit - Monthly/subscription one-tap checkout.
+// A session whose card holds an active monthly pass has its service fee waived by the
+// fee engine (totalAmount = 0). There is nothing to collect, so this finalizes the exit
+// directly — no QR, no cash — letting the operator just scan the card to open the gate.
+// Eligibility is re-validated server-side: the session must be monthly AND owe nothing.
+// A monthly session still carrying a penalty (e.g. lost ticket) owes money and must go
+// through the normal cash/card flow instead.
+exports.confirmMonthlyCheckout = async (req, res) => {
+    try {
+        const { session_id } = req.params;
+        const { image_out_base64 } = req.body;
+
+        if (!session_id) {
+            return res.status(422).json({ success: false, message: "Session ID is required" });
+        }
+
+        // Sync lost ticket status so a pending penalty is reflected in the fee below
+        await sessionsRepo.syncLostTicketStatus(session_id);
+
+        const session = await sessionsRepo.getSession(session_id);
+        if (!session) {
+            return res.status(404).json({ success: false, message: "Parking session not found" });
+        }
+        if (session.time_out) {
+            return res.status(400).json({ success: false, message: "This parking session is already completed" });
+        }
+
+        if (!session.is_monthly) {
+            return res.status(409).json({ success: false, message: "Session is not a monthly subscription" });
+        }
+
+        // Normalize is_lost for the finalize write
+        session.is_lost =
+            session.is_lost === true || session.is_lost === 1 || session.is_lost === "t" || session.is_lost === "true";
+
+        const feeResult = await calculateAndValidateFee(session);
+        if (!feeResult.success) {
+            return res.status(400).json({ success: false, message: feeResult.error });
+        }
+        if (Math.round(feeResult.totalAmount) !== 0) {
+            return res.status(409).json({
+                success: false,
+                message: "Outstanding balance on this session — use cash or card checkout",
+            });
+        }
+
+        const result = await checkoutService.settleCheckout({
+            sessionId: Number(session_id),
+            totalAmount: 0,
+            isLost: session.is_lost,
+            paymentMethod: "MONTHLY",
+        });
+
+        let timeOut;
+        if (result.finalized) {
+            timeOut = new Date().toISOString();
+        } else {
+            const freshSession = await sessionsRepo.getSession(session_id);
+            timeOut = freshSession ? freshSession.time_out : null;
+        }
+
+        // Trigger gate light for exit
+        if (session.entry_lane_id) {
+            setState(session.entry_lane_id, { status: "OPEN", plate: session.license_plate || "", message: "Tạm biệt" });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Monthly checkout completed",
+            payment: {
+                session_id: Number(session_id),
+                amount: 0,
+                method: "MONTHLY",
+                paid_at: new Date().toISOString(),
+                already_finalized: !result.finalized,
+            },
+            session: {
+                session_id: Number(session_id),
+                time_out: timeOut,
+            },
+        });
+
+        // Fire-and-forget: persist the exit evidence image after responding
+        if (image_out_base64) {
+            uploadCheckoutImage(image_out_base64, {
+                lotId: String(session.lot_id),
+                sessionId: String(session_id),
+            }).then((objectKey) => {
+                if (objectKey) {
+                    return sessionsRepo.updateSessionImageUrl(Number(session_id), "image_out_url", objectKey);
+                }
+            }).catch(() => {}); // swallow — errors are logged inside helper
+        }
+    } catch (error) {
+        console.error("Monthly checkout error:", error);
+        if (error.message && error.message.toLowerCase().includes("timeout")) {
+            return res.status(503).json({
+                success: false,
+                message: "Hệ thống đang bận, vui lòng thử lại sau",
+            });
+        }
         res.status(500).json({ success: false, message: "Internal server error" });
     }
 };

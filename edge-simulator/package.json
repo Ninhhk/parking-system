@@ -1,0 +1,13 @@
+{
+    "name": "edge-simulator",
+    "version": "1.0.0",
+    "description": "Edge gateway simulator for parking lot system",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js",
+        "test": "node ../be/node_modules/jest/bin/jest.js --rootDir ."
+    },
+    "dependencies": {
+        "uuid": "^9.0.0"
+    }
+}

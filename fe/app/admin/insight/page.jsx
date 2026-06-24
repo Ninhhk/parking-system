@@ -26,6 +26,7 @@ import {
   fetchParkingDuration,
 } from "../../api/admin.client";
 import { toast } from "react-hot-toast";
+import api from "../../api/client.config";
 
 // Register the chart.js components
 ChartJS.register(
@@ -464,6 +465,9 @@ export default function InsightPage() {
           </div>
         </div>
       </div>
+
+      {/* Export Data Section */}
+      <ExportPanel />
     </div>
   );
 }
@@ -479,6 +483,82 @@ function StatCard({ title, value, icon }) {
           <p className="text-xl font-bold">{value}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Export panel component
+function ExportPanel() {
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [exporting, setExporting] = useState(null); // "sessions" | "payments" | null
+
+  const handleExport = async (entity) => {
+    setExporting(entity);
+    try {
+      const params = new URLSearchParams();
+      if (from) params.append("from", from);
+      if (to) params.append("to", to);
+      const query = params.toString() ? `?${params.toString()}` : "";
+
+      const res = await api.get(`/admin/export/${entity}${query}`, { responseType: "blob" });
+      const blob = new Blob([res.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${entity}_${from || "all"}_${to || "all"}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Export failed");
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  return (
+    <div className="mt-6 bg-white p-4 rounded-lg shadow">
+      <h2 className="text-lg font-semibold mb-3">Export Raw Data</h2>
+      <p className="text-sm text-gray-500 mb-4">Download sessions or payments as .xlsx for external analysis or reporting.</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">From</label>
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+        <button
+          onClick={() => handleExport("sessions")}
+          disabled={exporting === "sessions"}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 text-sm font-medium"
+        >
+          {exporting === "sessions" ? "Exporting..." : "Export Sessions"}
+        </button>
+        <button
+          onClick={() => handleExport("payments")}
+          disabled={exporting === "payments"}
+          className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:bg-gray-300 text-sm font-medium"
+        >
+          {exporting === "payments" ? "Exporting..." : "Export Payments"}
+        </button>
+      </div>
+      {!from && !to && <p className="mt-2 text-xs text-gray-400">Leave dates blank to export all records.</p>}
     </div>
   );
 }

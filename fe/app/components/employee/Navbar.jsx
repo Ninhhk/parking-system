@@ -11,6 +11,7 @@ import {
     HiIdentification,
     HiSpeakerphone,
     HiBell,
+    HiClipboardList,
 } from "react-icons/hi";
 import {
     HiOutlineArrowLeftEndOnRectangle,
@@ -60,6 +61,7 @@ const Navbar = () => {
         { name: "Home", href: "/employee/", icon: <HiHome className="mr-1.5 h-4 w-4" /> },
         { name: "Check-in", href: "/employee/checkin", icon: <HiOutlineArrowRightEndOnRectangle className="mr-1.5 h-4 w-4" /> },
         { name: "Check-out", href: "/employee/checkout", icon: <HiOutlineArrowLeftEndOnRectangle className="mr-1.5 h-4 w-4" /> },
+        { name: "Vehicles", href: "/employee/vehicles", icon: <HiClipboardList className="mr-1.5 h-4 w-4" /> },
         { name: "Alerts", href: "/employee/notifications", icon: <HiSpeakerphone className="mr-1.5 h-4 w-4" /> },
         { name: "Profile", href: "/employee/profile", icon: <HiIdentification className="mr-1.5 h-4 w-4" /> },
     ];

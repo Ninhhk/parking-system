@@ -53,7 +53,7 @@ function ImageDisplay({ url, alt, label }) {
     );
 }
 
-const SessionDetailModal = ({ session, onClose }) => {
+const SessionDetailModal = ({ session, onClose, onProcess }) => {
     useEffect(() => {
         function handleEscKey(e) {
             if (e.key === "Escape") {
@@ -177,7 +177,16 @@ const SessionDetailModal = ({ session, onClose }) => {
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 border-t border-slate-150 bg-slate-50/50 flex justify-end">
+                <div className="px-6 py-4 border-t border-slate-150 bg-slate-50/50 flex justify-end gap-2">
+                    {onProcess && !session.time_out && (
+                        <button
+                            type="button"
+                            onClick={() => onProcess(session)}
+                            className="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 text-xs font-bold font-mono tracking-wider uppercase rounded-lg transition-all shadow-2xs hover:shadow-xs"
+                        >
+                            Process
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={onClose}

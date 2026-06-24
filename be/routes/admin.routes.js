@@ -16,6 +16,8 @@ const adminParkingCardsController = require("../controllers/admin.parkingCards.c
 const gateSettingsController = require("../controllers/admin.gateSettings.controller");
 const checkoutSettingsController = require("../controllers/admin.checkoutSettings.controller");
 const sessionAuditController = require("../controllers/session.audit.controller");
+const adminBatchController = require("../controllers/admin.batch.controller");
+const upload = require("../middlewares/upload.middleware");
 
 const { hasPermission } = require("../middlewares/auth.middleware");
 
@@ -49,9 +51,6 @@ router.delete("/parking-lots/:id", adminLotsController.deleteParkingLot);
 router.get("/lost-tickets", adminLostTicketController.getAllLostTicketReports);
 router.get("/lost-tickets/:id", adminLostTicketController.getLostTicketReportById);
 router.delete("/lost-tickets/:id", adminLostTicketController.deleteLostTicketReport);
-
-// Monthly Subs Management (legacy — kept for backward compatibility, reads from monthlysubs table)
-// New monthly management is via Card Pool PATCH /parking-cards/:card_uid/monthly
 
 // Payments Management
 router.get("/payments", adminPaymentController.getAllPayments);
@@ -106,5 +105,33 @@ router.post("/parking-cards", adminParkingCardsController.createCard);
 router.patch("/parking-cards/:card_uid/status", adminParkingCardsController.setStatus);
 router.delete("/parking-cards/:card_uid", adminParkingCardsController.deleteCard);
 router.patch("/parking-cards/:card_uid/monthly", adminParkingCardsController.updateMonthly);
+router.get("/parking-cards/:card_uid/holder", adminParkingCardsController.getHolder);
+router.put("/parking-cards/:card_uid/holder", adminParkingCardsController.upsertHolder);
+router.delete("/parking-cards/:card_uid/holder", adminParkingCardsController.deleteHolder);
+
+// Batch Import/Export
+router.get("/import/:entity/template", adminBatchController.downloadTemplate);
+
+function handleUpload(req, res, next) {
+    upload.single("file")(req, res, (err) => {
+        if (err) {
+            if (err.code === "LIMIT_FILE_SIZE") {
+                return res.status(422).json({ success: false, message: "File exceeds the 5 MB size limit" });
+            }
+            return res.status(422).json({ success: false, message: err.message || "File upload error" });
+        }
+        next();
+    });
+}
+
+router.post("/import/cards/preview", handleUpload, adminBatchController.previewCards);
+router.post("/import/cards/commit", handleUpload, adminBatchController.commitCards);
+router.post("/import/subs/preview", handleUpload, adminBatchController.previewSubs);
+router.post("/import/subs/commit", handleUpload, adminBatchController.commitSubs);
+
+router.get("/export/cards", adminBatchController.exportCards);
+router.get("/export/subs", adminBatchController.exportSubs);
+router.get("/export/sessions", adminBatchController.exportSessions);
+router.get("/export/payments", adminBatchController.exportPayments);
 
 module.exports = router;

@@ -79,6 +79,7 @@ export default function UnifiedCheckinPage() {
     // Result
     const [resultDetail, setResultDetail] = useState("");
     const [ticket, setTicket] = useState(null);
+    const [frozenFrame, setFrozenFrame] = useState(null);
 
     // Clock
     const [currentTime, setCurrentTime] = useState("");
@@ -196,18 +197,26 @@ export default function UnifiedCheckinPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [casualMode, kioskState, laneConfig]);
 
+    // Close the gate UNLESS it's being held open. Hold = sticky open: it overrides
+    // every outcome-driven close (denied / error / capture-fail / auto-reset); only
+    // Manual Close exits hold (Req 4.3).
+    const closeGateUnlessHold = () => {
+        if (gateContextRef.current !== "hold") setGateState("shut");
+    };
+
     const resetKiosk = () => {
         setCardUid("");
         setSubscription(null);
         setResultDetail("");
         setTicket(null);
+        setFrozenFrame(null);
         setEntryType(null);
         setVehicleType("");
         setDetectedPlate(null);
         setPendingVehiclePick(false);
         pendingSubmitRef.current = null;
         setKioskState(KIOSK_STATES.IDLE);
-        setGateState("shut");
+        closeGateUnlessHold();
     };
 
     // --- Capture + LPD (Req 3.2, 3.3, 3.4, 3.5, 4.3, 4.5, 4.6) ---
@@ -274,7 +283,7 @@ export default function UnifiedCheckinPage() {
                 pendingSubmitRef.current = descriptor;
                 setKioskState(KIOSK_STATES.CAPTURE_FAILED);
                 setResultDetail("Camera capture failed — retry or proceed without image");
-                setGateState("shut");
+                closeGateUnlessHold();
                 return;
             }
             throw err;
@@ -317,6 +326,7 @@ export default function UnifiedCheckinPage() {
             pendingSubmitRef.current = null;
             setKioskState(KIOSK_STATES.SUCCESS);
             setTicket(res.ticket || null);
+            setFrozenFrame(imageUrl);
             setGateState("open");
         } catch (err) {
             pendingSubmitRef.current = null;
@@ -324,11 +334,11 @@ export default function UnifiedCheckinPage() {
             if (status === 409 || status === 422) {
                 setKioskState(KIOSK_STATES.DENIED);
                 setResultDetail(err.response?.data?.message || "Entry denied");
-                setGateState("shut");
+                closeGateUnlessHold();
             } else {
                 setKioskState(KIOSK_STATES.ERROR);
                 setResultDetail("Check-in failed");
-                setGateState("shut");
+                closeGateUnlessHold();
             }
         }
     };
@@ -406,13 +416,13 @@ export default function UnifiedCheckinPage() {
                     // session_ticket mode — card not recognized
                     setKioskState(KIOSK_STATES.DENIED);
                     setResultDetail("Card not recognized");
-                    setGateState("shut");
+                    closeGateUnlessHold();
                 }
             } else {
                 // System error (network/5xx/abort)
                 setKioskState(KIOSK_STATES.ERROR);
                 setResultDetail("System error — please try again");
-                setGateState("shut");
+                closeGateUnlessHold();
             }
         }
     };
@@ -517,7 +527,7 @@ export default function UnifiedCheckinPage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Left pane: Camera */}
                 <div className="lg:col-span-7 space-y-6 flex flex-col">
-                    <KioskCameraPanel ref={cameraRef} />
+                    <KioskCameraPanel ref={cameraRef} frozenFrame={frozenFrame} />
 
                     {/* No camera configured warning (degraded mode) */}
                     {laneConfig && laneConfig.has_camera === false && (

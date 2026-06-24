@@ -1,4 +1,10 @@
+import { useState } from "react";
+
 export default function GateStatusPanel({ isOpen, isHoldMode, onManualOpen, onHoldOpen, onManualClose }) {
+    // Hold props the gate open indefinitely — gate it behind an explicit confirm so it
+    // can't be triggered by accident.
+    const [confirmHold, setConfirmHold] = useState(false);
+
     return (
         <section className={`rounded-xl border transition-all duration-300 p-5 shadow-sm ${
             isOpen && isHoldMode
@@ -59,7 +65,7 @@ export default function GateStatusPanel({ isOpen, isHoldMode, onManualOpen, onHo
                     {onHoldOpen && (
                         <button
                             type="button"
-                            onClick={onHoldOpen}
+                            onClick={() => setConfirmHold(true)}
                             className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 hover:text-amber-800 transition-all duration-200 cursor-pointer active:scale-[0.97] shadow-sm"
                         >
                             Hold Open
@@ -76,6 +82,30 @@ export default function GateStatusPanel({ isOpen, isHoldMode, onManualOpen, onHo
                     )}
                 </div>
             </div>
+
+            {confirmHold && (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-xs font-semibold text-amber-800 mb-2">
+                        Hold the gate open indefinitely? It stays open through any payment result or auto-close until you press Manual Close.
+                    </p>
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            onClick={() => { setConfirmHold(false); onHoldOpen(); }}
+                            className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-all duration-200 cursor-pointer active:scale-[0.97] shadow-sm"
+                        >
+                            Confirm Hold
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setConfirmHold(false)}
+                            className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 cursor-pointer active:scale-[0.97] shadow-sm"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
         </section>
     );
 }

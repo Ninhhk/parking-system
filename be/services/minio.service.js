@@ -24,7 +24,7 @@ if (isMinioConfigured) {
     });
 }
 
-const VALID_DIRECTIONS = ["in", "out"];
+const VALID_DIRECTIONS = ["in", "out", "id"];
 const VALID_EXTENSIONS = ["jpg", "jpeg", "png"];
 const MAX_BUFFER_SIZE = 10 * 1024 * 1024; // 10 MB
 

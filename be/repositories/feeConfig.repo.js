@@ -16,6 +16,12 @@ exports.getActiveConfig = async (vehicleType, referenceTime) => {
     const row = result.rows[0];
     return {
         ...row,
+        // node-postgres returns NUMERIC/DECIMAL columns as strings. Coerce the
+        // numeric fee fields to numbers so rules that use "+" (penalty, daily cap)
+        // perform arithmetic instead of string concatenation.
+        hourly_rate:      Number(row.hourly_rate),
+        daily_cap_amount: Number(row.daily_cap_amount),
+        penalty_fee:      Number(row.penalty_fee),
         tiers:        row.tiers        || [],
         time_windows: row.time_windows || [],
     };

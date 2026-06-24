@@ -1,0 +1,274 @@
+{
+  "metadata": {
+    "timestamp": "2026-06-24T09:20:50.791Z",
+    "cpu": "AMD Ryzen 7 6800H with Radeon Graphics         ",
+    "ramGB": 16,
+    "os": "Windows_NT 10.0.26200",
+    "nodeVersion": "v20.18.1",
+    "dbPoolMax": 20
+  },
+  "results": [
+    {
+      "name": "load-checkin",
+      "status": "PASS",
+      "metrics": {
+        "endpoint": "/api/employee/parking/entry",
+        "concurrency": 30,
+        "duration": 15.04,
+        "totalRequests": 5535,
+        "successCount": 0,
+        "errorCount": 5535,
+        "errorRate": 100,
+        "p50": 76,
+        "p95": 120,
+        "rps": 368.02
+      },
+      "error": null,
+      "durationMs": 15070
+    },
+    {
+      "name": "load-checkout",
+      "status": "PASS",
+      "metrics": {
+        "endpoint": "/api/employee/parking/exit/confirm",
+        "concurrency": 30,
+        "duration": 15.04,
+        "totalRequests": 15769,
+        "successCount": 0,
+        "errorCount": 15769,
+        "errorRate": 100,
+        "p50": 27,
+        "p95": 38,
+        "rps": 1048.47
+      },
+      "error": null,
+      "durationMs": 15040
+    },
+    {
+      "name": "load-payment-intent",
+      "status": "PASS",
+      "metrics": {
+        "endpoint": "/api/employee/parking/exit/376/payment-intents",
+        "concurrency": 30,
+        "duration": 15.2,
+        "totalRequests": 50,
+        "successCount": 0,
+        "errorCount": 50,
+        "errorRate": 100,
+        "p50": 4963,
+        "p95": 9972,
+        "rps": 3.29
+      },
+      "error": null,
+      "durationMs": 15221
+    },
+    {
+      "name": "perf-checkin-c10",
+      "status": "PASS",
+      "metrics": {
+        "endpoint": "POST /api/employee/parking/entry",
+        "concurrency": 10,
+        "duration": 10.07,
+        "totalRequests": 85,
+        "successCount": 75,
+        "errorCount": 10,
+        "errorRate": 11.76470588235294,
+        "p50": 42,
+        "p95": 5061,
+        "rps": 8.440913604766633
+      },
+      "error": null,
+      "durationMs": 10074
+    },
+    {
+      "name": "perf-checkin-c25",
+      "status": "PASS",
+      "metrics": {
+        "endpoint": "POST /api/employee/parking/entry",
+        "concurrency": 25,
+        "duration": 10.02,
+        "totalRequests": 3893,
+        "successCount": 3893,
+        "errorCount": 0,
+        "errorRate": 0,
+        "p50": 61,
+        "p95": 89,
+        "rps": 388.52295409181636
+      },
+      "error": null,
+      "durationMs": 10025
+    },
+    {
+      "name": "perf-checkin-c50",
+      "status": "PASS",
+      "metrics": {
+        "endpoint": "POST /api/employee/parking/entry",
+        "concurrency": 50,
+        "duration": 10.03,
+        "totalRequests": 4193,
+        "successCount": 4193,
+        "errorCount": 0,
+        "errorRate": 0,
+        "p50": 115,
+        "p95": 146,
+        "rps": 418.0458624127617
+      },
+      "error": null,
+      "durationMs": 10036
+    },
+    {
+      "name": "perf-checkin-c100",
+      "status": "PASS",
+      "metrics": {
+        "endpoint": "POST /api/employee/parking/entry",
+        "concurrency": 100,
+        "duration": 10.05,
+        "totalRequests": 4174,
+        "successCount": 4174,
+        "errorCount": 0,
+        "errorRate": 0,
+        "p50": 230,
+        "p95": 289,
+        "rps": 415.3233830845771
+      },
+      "error": null,
+      "durationMs": 10055
+    },
+    {
+      "name": "perf-checkout-c10",
+      "status": "PASS",
+      "metrics": {
+        "endpoint": "POST /api/employee/parking/exit/confirm",
+        "concurrency": 10,
+        "duration": 10.01,
+        "totalRequests": 10062,
+        "successCount": 10062,
+        "errorCount": 0,
+        "errorRate": 0,
+        "p50": 9,
+        "p95": 16,
+        "rps": 1005.1948051948052
+      },
+      "error": null,
+      "durationMs": 10012
+    },
+    {
+      "name": "perf-checkout-c25",
+      "status": "PASS",
+      "metrics": {
+        "endpoint": "POST /api/employee/parking/exit/confirm",
+        "concurrency": 25,
+        "duration": 10.01,
+        "totalRequests": 10654,
+        "successCount": 10654,
+        "errorCount": 0,
+        "errorRate": 0,
+        "p50": 22,
+        "p95": 32,
+        "rps": 1064.3356643356644
+      },
+      "error": null,
+      "durationMs": 10018
+    },
+    {
+      "name": "perf-checkout-c50",
+      "status": "PASS",
+      "metrics": {
+        "endpoint": "POST /api/employee/parking/exit/confirm",
+        "concurrency": 50,
+        "duration": 10.03,
+        "totalRequests": 10420,
+        "successCount": 10420,
+        "errorCount": 0,
+        "errorRate": 0,
+        "p50": 46,
+        "p95": 63,
+        "rps": 1038.8833499501495
+      },
+      "error": null,
+      "durationMs": 10032
+    },
+    {
+      "name": "perf-checkout-c100",
+      "status": "PASS",
+      "metrics": {
+        "endpoint": "POST /api/employee/parking/exit/confirm",
+        "concurrency": 100,
+        "duration": 10.05,
+        "totalRequests": 9889,
+        "successCount": 9889,
+        "errorCount": 0,
+        "errorRate": 0,
+        "p50": 98,
+        "p95": 125,
+        "rps": 983.9800995024875
+      },
+      "error": null,
+      "durationMs": 10055
+    },
+    {
+      "name": "disaster-db",
+      "status": "PASS",
+      "metrics": null,
+      "error": null,
+      "durationMs": 4695,
+      "assertions": [
+        {
+          "description": "Returns error when DB is down",
+          "passed": true,
+          "actualMs": 5
+        },
+        {
+          "description": "Recovers within 30s after restart",
+          "passed": true,
+          "actualMs": 2055
+        }
+      ]
+    },
+    {
+      "name": "disaster-race",
+      "status": "PASS",
+      "metrics": null,
+      "error": null,
+      "durationMs": 394,
+      "assertions": [
+        {
+          "description": "All checkouts succeed (no 5xx), exactly 1 finalizes",
+          "passed": true,
+          "details": {
+            "total": 5,
+            "http200": 1,
+            "finalized": 1,
+            "errors5xx": 0
+          }
+        },
+        {
+          "description": "All payment intents succeed (no 5xx), serialized correctly",
+          "passed": true,
+          "details": {
+            "total": 5,
+            "successes": 5,
+            "errors5xx": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "disaster-minio",
+      "status": "PASS",
+      "metrics": null,
+      "error": null,
+      "durationMs": 5348,
+      "assertions": [
+        {
+          "description": "Check-in succeeds when MinIO is down",
+          "passed": true
+        },
+        {
+          "description": "MinIO recovers after restart",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

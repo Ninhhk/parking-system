@@ -74,29 +74,16 @@ export async function fetchFreeEmployees() {
     return res.data.data;
 }
 
-// ===================== MONTHLY SUBSCRIPTIONS =====================
-// Fetch all monthly subs
-export async function fetchAllMonthlySubs() {
-    const res = await api.get("/admin/monthly-subs");
-    return res.data.data;
-}
-
-// Create a new monthly sub
-export async function createMonthlySub(sub) {
-    const res = await api.post("/admin/monthly-subs", sub);
-    return res.data.data;
-}
-
-// Delete a monthly sub
-export async function deleteMonthlySub(id) {
-    const res = await api.delete(`/admin/monthly-subs/${id}`);
-    return res.data.data;
-}
-
 // ===================== PAYMENTS =====================
-// Fetch all payments
-export async function fetchAllPayments() {
-    const res = await api.get("/admin/payments");
+// Fetch payments with pagination
+export async function fetchAllPayments({ page, pageSize, q, from, to } = {}) {
+    const params = {};
+    if (page) params.page = page;
+    if (pageSize) params.pageSize = pageSize;
+    if (q) params.q = q;
+    if (from) params.from = from;
+    if (to) params.to = to;
+    const res = await api.get("/admin/payments", { params });
     return res.data.data;
 }
 
@@ -144,9 +131,13 @@ export async function deleteNotification(id) {
 }
 
 // ===================== LOST TICKETS =====================
-// Fetch all lost ticket reports
-export async function fetchAllLostTickets() {
-    const res = await api.get("/admin/lost-tickets");
+// Fetch lost ticket reports (paginated)
+export async function fetchAllLostTickets({ page, pageSize, q } = {}) {
+    const params = {};
+    if (page) params.page = page;
+    if (pageSize) params.pageSize = pageSize;
+    if (q) params.q = q;
+    const res = await api.get("/admin/lost-tickets", { params });
     return res.data.data;
 }
 
@@ -301,6 +292,29 @@ export async function deleteParkingCard(cardUid) {
 // Toggle monthly subscription state on a pool card
 export async function updateCardMonthly(cardUid, { is_monthly, monthly_end_date }) {
     const res = await api.patch(`/admin/parking-cards/${cardUid}/monthly`, { is_monthly, monthly_end_date });
+    return res.data.data;
+}
+
+// Fetch holder info for a card (returns null if no holder)
+export async function fetchCardHolder(cardUid) {
+    try {
+        const res = await api.get(`/admin/parking-cards/${cardUid}/holder`);
+        return res.data.data;
+    } catch (err) {
+        if (err.response?.status === 404) return null;
+        throw err;
+    }
+}
+
+// Create or update holder info for a card
+export async function upsertCardHolder(cardUid, holder) {
+    const res = await api.put(`/admin/parking-cards/${cardUid}/holder`, holder);
+    return res.data.data;
+}
+
+// Delete holder info for a card
+export async function deleteCardHolder(cardUid) {
+    const res = await api.delete(`/admin/parking-cards/${cardUid}/holder`);
     return res.data.data;
 }
 

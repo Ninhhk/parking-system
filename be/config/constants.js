@@ -93,6 +93,11 @@ const CAMERA_OFFLINE_THRESHOLD_SECONDS = 60;
 const PAYMENT_INTENT_V2_ENABLED = String(process.env.PAYMENT_INTENT_V2_ENABLED || 'true') === 'true';
 const RFID_CHECKIN_ENABLED = String(process.env.RFID_CHECKIN_ENABLED || 'true') === 'true';
 
+// Batch Import/Export
+const MAX_IMPORT_ROWS = 5000;
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const PREVIEW_ROWS = 50;
+
 module.exports = {
     // Session
     SESSION_MAX_AGE_HOURS,
@@ -142,4 +147,9 @@ module.exports = {
     // Feature Flags
     PAYMENT_INTENT_V2_ENABLED,
     RFID_CHECKIN_ENABLED,
+
+    // Batch Import/Export
+    MAX_IMPORT_ROWS,
+    MAX_FILE_SIZE_BYTES,
+    PREVIEW_ROWS,
 };

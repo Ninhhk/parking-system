@@ -1,4 +1,6 @@
 const parkingCardsService = require("../services/admin.parkingCards.service");
+const parkingCardsRepo = require("../repositories/parkingCards.repo");
+const cardHoldersRepo = require("../repositories/cardHolders.repo");
 const { isValidCardUid } = require("../utils/cardUid");
 
 function handleServiceError(res, err) {
@@ -114,6 +116,77 @@ exports.updateMonthly = async (req, res) => {
             monthly_end_date: is_monthly ? monthly_end_date : null,
         });
         return res.status(200).json({ success: true, data: card });
+    } catch (err) {
+        return handleServiceError(res, err);
+    }
+};
+
+exports.getHolder = async (req, res) => {
+    const { card_uid } = req.params;
+
+    if (!isValidCardUid(card_uid)) {
+        return res.status(422).json({ success: false, message: "Invalid card UID" });
+    }
+
+    try {
+        const holder = await cardHoldersRepo.getHolder(card_uid);
+        if (!holder) {
+            return res.status(404).json({ success: false, message: "No holder found for this card" });
+        }
+        return res.status(200).json({ success: true, data: holder });
+    } catch (err) {
+        return handleServiceError(res, err);
+    }
+};
+
+exports.upsertHolder = async (req, res) => {
+    const { card_uid } = req.params;
+    const { holder_name, holder_phone, license_plate, vehicle_type } = req.body;
+
+    if (!isValidCardUid(card_uid)) {
+        return res.status(422).json({ success: false, message: "Invalid card UID" });
+    }
+    if (!holder_name || !holder_name.trim()) {
+        return res.status(422).json({ success: false, message: "holder_name is required" });
+    }
+    if (!holder_phone || !holder_phone.trim()) {
+        return res.status(422).json({ success: false, message: "holder_phone is required" });
+    }
+
+    try {
+        const card = await parkingCardsRepo.getPoolCard(card_uid);
+        if (!card) {
+            return res.status(404).json({ success: false, message: "Card not found" });
+        }
+        if (!card.is_monthly) {
+            return res.status(422).json({ success: false, message: "Holder info can only be assigned to monthly cards" });
+        }
+
+        const holder = await cardHoldersRepo.upsertHolder(card_uid, {
+            holder_name: holder_name.trim(),
+            holder_phone: holder_phone.trim(),
+            license_plate: license_plate || null,
+            vehicle_type: vehicle_type || null,
+        });
+        return res.status(200).json({ success: true, data: holder });
+    } catch (err) {
+        return handleServiceError(res, err);
+    }
+};
+
+exports.deleteHolder = async (req, res) => {
+    const { card_uid } = req.params;
+
+    if (!isValidCardUid(card_uid)) {
+        return res.status(422).json({ success: false, message: "Invalid card UID" });
+    }
+
+    try {
+        const deleted = await cardHoldersRepo.deleteHolder(card_uid);
+        if (!deleted) {
+            return res.status(404).json({ success: false, message: "No holder found for this card" });
+        }
+        return res.status(200).json({ success: true, data: deleted });
     } catch (err) {
         return handleServiceError(res, err);
     }

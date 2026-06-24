@@ -7,6 +7,8 @@ const UPLOAD_TIMEOUT_MS = 5000; // 5 seconds
 /**
  * Determines if a string looks like base64 image data (not a URL/path).
  * Accepts raw base64 or data URI format (data:image/...;base64,...).
+ * Also accepts data:application/octet-stream which some browsers produce
+ * for camera captures or file inputs with unknown MIME.
  */
 function isBase64Image(value) {
     if (!value || typeof value !== "string") {
@@ -14,6 +16,10 @@ function isBase64Image(value) {
     }
     // Data URI format
     if (value.startsWith("data:image/")) {
+        return true;
+    }
+    // Some browsers/mobile cameras produce octet-stream for image files
+    if (value.startsWith("data:application/octet-stream")) {
         return true;
     }
     // Not a URL or file path
@@ -34,6 +40,13 @@ function parseBase64Image(value) {
         if (match) {
             const ext = match[1] === "jpeg" ? "jpg" : match[1];
             return { raw: match[2], ext };
+        }
+    }
+    // Handle data:application/octet-stream;base64,... (default to jpg)
+    if (value.startsWith("data:application/octet-stream")) {
+        const match = value.match(/^data:application\/octet-stream;base64,(.+)$/);
+        if (match) {
+            return { raw: match[1], ext: "jpg" };
         }
     }
     // Default to jpg for raw base64 without data URI prefix
