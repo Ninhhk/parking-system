@@ -1,24 +1,7 @@
 import api from "./client.config";
 
-export async function fetchHomePage() {
-    const res = await api.get("/employee");
-    return res.data.data;
-}
-
 export async function fetchMyLot() {
     const res = await api.get("/employee/monitor");
-    return res.data.data;
-}
-
-// Get parking lots for the employee
-export async function fetchParkingLots() {
-    const res = await api.get("/employee/parking-lots");
-    return res.data.data;
-}
-
-// Get active parking sessions for the employee's lot
-export async function fetchActiveSessions() {
-    const res = await api.get("/employee/parking-sessions");
     return res.data.data;
 }
 
