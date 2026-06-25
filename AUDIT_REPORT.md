@@ -1,19 +1,19 @@
 # Audit Report
 
-Generated: 2025-07-20
+Generated: 2025-07-20 | Finalized: 2026-06-25
 
 ## Summary
 
 | Layer | CONFIRMED_DEAD | SUSPICIOUS | Total |
 |-------|:-:|:-:|:-:|
 | Backend (`be/`) | 4 | 0 | 4 |
-| Frontend (`fe/`) | 13 | 3 | 16 |
+| Frontend (`fe/`) | 12 | 3 | 15 |
 | LPD (`Licence-Plate-Detection-Recognition-Recording/`) | 4 | 5 | 9 |
 | Database Schema | 2 | 1 | 3 |
 | Specs (`.kiro/specs/`) | 8 | 0 | 8 |
 | Migration Consolidation | — | — | 3 groups |
 | Unused Dependencies | 0 | 3 | 3 |
-| **Total** | **31** | **12** | **43** |
+| **Total** | **30** | **12** | **42** |
 
 ---
 
@@ -48,7 +48,7 @@ Generated: 2025-07-20
 | `fe/app/api/employee.client.js` | `fetchHomePage` (export) | Named export never imported by any source or test file | REMOVE export |
 | `fe/app/api/employee.client.js` | `fetchActiveSessions` (export) | Named export never imported by any source or test file | REMOVE export |
 | `fe/app/api/employee.client.js` | `fetchParkingLots` (export) | Named export never imported; all usages reference `fetchParkingLots` from `admin.client` | REMOVE export |
-| `fe/app/employee/checkin/components/ResultPanel.jsx` | ResultPanel | 0 imports; component defined but never rendered | REMOVE |
+| `fe/app/employee/checkin/components/ResultPanel.jsx` | ResultPanel | ~~0 imports; component defined but never rendered~~ **RECLASSIFIED: ACTIVE** — imported and used by `fe/app/employee/checkin/page.jsx:11` | ~~REMOVE~~ KEEP |
 | `fe/app/admin/monthly-subs/` | empty route directory | No files, no `page.jsx`; MonthlySubForm also dead | REMOVE directory |
 | `fe/app/admin/export/` | empty route directory | No files | REMOVE directory |
 | `fe/app/admin/import/` | empty route directory | No files | REMOVE directory |
@@ -155,3 +155,71 @@ Generated: 2025-07-20
 |---------|----------|----------|--------|
 | `python-dotenv` | SUSPICIOUS | Zero `import dotenv` or `load_dotenv()` calls found anywhere; no `.flaskenv` file exists | REVIEW — may be vestigial |
 | `werkzeug` | SUSPICIOUS | No direct `import werkzeug`; however Flask depends on it internally as WSGI layer | Keep — removing breaks Flask |
+
+---
+
+## Cleanup Outcomes (2026-06-25)
+
+### Backend — REMOVED
+
+| Item | File | Commit |
+|------|------|--------|
+| `admin.payments.repo.js` (entire file) | `be/repositories/admin.payments.repo.js` | `40727ed` |
+| `createPendingPayment` (export) | `be/repositories/employee.sessions.repo.js` | `40727ed` |
+| `confirmPayment` (export) | `be/repositories/employee.sessions.repo.js` | `40727ed` |
+| `createAndConfirmPayment` (export) | `be/repositories/employee.sessions.repo.js` | `40727ed` |
+
+### Frontend — REMOVED
+
+| Item | File | Commit |
+|------|------|--------|
+| PrintableTicket (component) | `fe/app/components/common/PrintableTicket.jsx` | `e436941` |
+| Sidebar (deprecated component) | `fe/app/components/employee/Sidebar.jsx` | `e436941` |
+| PageHeader employee (component) | `fe/app/components/employee/PageHeader.jsx` | `e436941` |
+| MonthlySubForm (component) | `fe/app/components/admin/MonthlySubForm.jsx` | `e436941` |
+| employee.audit.client (module) | `fe/app/api/employee.audit.client.js` | `e436941` |
+| `fetchHomePage` (export) | `fe/app/api/employee.client.js` | `e436941` |
+| `fetchActiveSessions` (export) | `fe/app/api/employee.client.js` | `e436941` |
+| `fetchParkingLots` (export) | `fe/app/api/employee.client.js` | `e436941` |
+| Empty directories (4) | `monthly-subs/`, `export/`, `import/`, `rfid/components/` | `e436941` |
+
+### Frontend — RECLASSIFIED
+
+| Item | From | To | Reason |
+|------|------|----|--------|
+| ResultPanel | CONFIRMED_DEAD | ACTIVE | Imported by `employee/checkin/page.jsx` — build broke when deleted |
+
+### LPD — REMOVED
+
+| Item | File | Commit |
+|------|------|--------|
+| `config` package (empty) | `config/__init__.py` | `e3bb8f4` |
+| `repo5.api` FastAPI app (superseded) | `repo5/api/app.py` | `e3bb8f4` |
+| `repo5.api` package init | `repo5/api/__init__.py` | `e3bb8f4` |
+| Test file for dead FastAPI app | `repo5/tests/test_api.py` | `e3bb8f4` |
+| `import multiprocessing` (unused) | `gunicorn.conf.py` | `e3bb8f4` |
+
+### Database — REMOVED
+
+| Item | Object | Migration |
+|------|--------|-----------|
+| `next_retry_at` column | `edge_events` | `024_cleanup.sql` (`03a300a`) |
+| `idx_payment_attempts_session_status_created` index | `payment_attempts` | `024_cleanup.sql` (`03a300a`) |
+
+### Specs — REMOVED (`.kiro/specs/`)
+
+8 CONFIRMED_DEAD specs deleted from disk (`.kiro/` gitignored — no commit needed):
+`card-pool-management`, `edge-event-bugs`, `edge-gateway-simulator`, `fee-calculation-engine`, `minio-image-storage`, `session-audit-viewer`, `subscription-bug-fixes`, `unified-checkin-kiosk`
+
+### Unused Dependencies — NOT REMOVED
+
+All dependency findings were SUSPICIOUS (0 CONFIRMED_DEAD). No packages removed. Candidates for manual review: `fast-check` (fe), `python-dotenv` (LPD).
+
+### Verification Gate
+
+| Layer | Tests | Result |
+|-------|-------|--------|
+| Backend | 67 passed, 15 failed (integration, pre-existing) | ✅ |
+| Frontend | 19 passed, 6 failed (pre-existing) | ✅ |
+| LPD | 93 passed | ✅ |
+| Docker stack | 4/4 healthy | ✅ |
