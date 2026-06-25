@@ -3,7 +3,6 @@ Gunicorn configuration for LPD API Service
 Optimized for production with memory leak mitigation
 """
 
-import multiprocessing
 import os
 
 # Server socket
