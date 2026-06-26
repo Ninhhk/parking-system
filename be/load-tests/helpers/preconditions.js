@@ -24,8 +24,9 @@ function request(url, options = {}) {
 }
 
 /**
- * Verify that the backend is running and seed data exists.
+ * Verify that the backend is reachable on the hot-path endpoints.
  * Aborts on first unreachable endpoint with descriptive error.
+ * (Seed data is created by seed() immediately after, so it is not verified here.)
  *
  * @param {string} baseUrl - e.g. "http://localhost:5000"
  * @param {string} authCookie - e.g. "connect.sid=s%3A..."
@@ -33,7 +34,7 @@ function request(url, options = {}) {
 async function checkPreconditions(baseUrl, authCookie) {
     const headers = { Cookie: authCookie };
 
-    // Endpoints to probe — any HTTP response (even 404/405) means server is up.
+    // Probe hot-path endpoints — any HTTP response (even 404/405) means server is up.
     // Connection refused or timeout means server is down.
     const probes = [
         { url: `${baseUrl}/api/employee/parking/exit/by-card/000000`, label: "checkout-by-card" },
@@ -48,36 +49,6 @@ async function checkPreconditions(baseUrl, authCookie) {
                 `Precondition failed: endpoint "${probe.label}" (${probe.url}) is unreachable — ${err.message}`
             );
         }
-    }
-
-    // Verify seed data: at least 1 available card
-    try {
-        const cardsRes = await request(`${baseUrl}/api/admin/cards`, { method: "GET", headers });
-        if (cardsRes.statusCode === 200) {
-            const data = JSON.parse(cardsRes.body);
-            const cards = data.cards || data.data || data;
-            if (Array.isArray(cards) && cards.length === 0) {
-                throw new Error("Precondition failed: no cards found in system — seed data required");
-            }
-        }
-    } catch (err) {
-        if (err.message.startsWith("Precondition failed")) throw err;
-        throw new Error(`Precondition failed: could not verify seed data (cards) — ${err.message}`);
-    }
-
-    // Verify seed data: at least 1 active session
-    try {
-        const sessionsRes = await request(`${baseUrl}/api/employee/parking/sessions/active`, { method: "GET", headers });
-        if (sessionsRes.statusCode === 200) {
-            const data = JSON.parse(sessionsRes.body);
-            const sessions = data.sessions || data.data || data;
-            if (Array.isArray(sessions) && sessions.length === 0) {
-                throw new Error("Precondition failed: no active parking sessions found — seed data required");
-            }
-        }
-    } catch (err) {
-        if (err.message.startsWith("Precondition failed")) throw err;
-        throw new Error(`Precondition failed: could not verify seed data (active sessions) — ${err.message}`);
     }
 }
 
