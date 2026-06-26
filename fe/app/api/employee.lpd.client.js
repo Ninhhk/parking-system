@@ -73,7 +73,11 @@ export async function detectLicensePlate(base64Image) {
         };
 
     } catch (error) {
-        console.error('LPD detection error:', error);
+        // Logged at warn level (not error): detection failures are an expected,
+        // handled condition — callers (check-in kiosk, checkout) catch this and
+        // degrade gracefully (proceed without a plate). Avoids alarming red stack
+        // traces in the console when LPD is enabled but the service is down/sees no plate.
+        console.warn('LPD detection failed:', error.response?.data?.message || error.message);
 
         // Extract meaningful error message
         let errorMessage = 'Failed to detect license plate';

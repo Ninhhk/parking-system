@@ -29,6 +29,7 @@ export function useParkingLots() {
         car_capacity: "",
         bike_capacity: "",
         managed_by: "",
+        casual_entry_mode: "",
     });
 
     const [formLoading, setFormLoading] = useState(false);
@@ -123,6 +124,7 @@ export function useParkingLots() {
             car_capacity: lot.car_capacity,
             bike_capacity: lot.bike_capacity,
             managed_by: lot.managed_by || "", // Convert null to empty string for the form
+            casual_entry_mode: lot.casual_entry_mode || "",
         });
         setShowEditForm(true);
     };

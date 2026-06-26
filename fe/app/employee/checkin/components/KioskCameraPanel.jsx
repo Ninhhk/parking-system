@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from "re
  * Always-on camera panel for the unified kiosk.
  * Exposes a `capture()` method via ref that returns a base64 JPEG string.
  */
-const KioskCameraPanel = forwardRef(function KioskCameraPanel(_, ref) {
+const KioskCameraPanel = forwardRef(function KioskCameraPanel({ onReady, title = "Entry Camera Feed", headerActions, frozenFrame } = {}, ref) {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const streamRef = useRef(null);
@@ -34,6 +34,9 @@ const KioskCameraPanel = forwardRef(function KioskCameraPanel(_, ref) {
                     await videoRef.current.play();
                 }
                 setStatus("live");
+                if (typeof onReady === "function") {
+                    onReady();
+                }
             } catch (err) {
                 if (mounted) {
                     setErrorMsg(err.name === "NotAllowedError" ? "Camera permission denied" : err.message);
@@ -75,13 +78,16 @@ const KioskCameraPanel = forwardRef(function KioskCameraPanel(_, ref) {
                     <svg className="w-4 h-4 text-indigo-650" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
-                    <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-700">Entry Camera Feed</h2>
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-700">{title}</h2>
                 </div>
-                <span
-                    className={`inline-block w-2.5 h-2.5 rounded-full border border-white ${
-                        status === "live" ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]" : status === "connecting" ? "bg-amber-400" : "bg-rose-500"
-                    }`}
-                />
+                <div className="flex items-center gap-3">
+                    {headerActions}
+                    <span
+                        className={`inline-block w-2.5 h-2.5 rounded-full border border-white ${
+                            status === "live" ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]" : status === "connecting" ? "bg-amber-400" : "bg-rose-500"
+                        }`}
+                    />
+                </div>
             </div>
 
             <div className="relative bg-slate-900" style={{ aspectRatio: "16/9" }}>
@@ -90,11 +96,29 @@ const KioskCameraPanel = forwardRef(function KioskCameraPanel(_, ref) {
                     className="w-full h-full object-cover"
                     playsInline
                     muted
-                    style={{ opacity: status === "live" ? 1 : 0 }}
+                    style={{ opacity: status === "live" && !frozenFrame ? 1 : 0 }}
                 />
 
+                {/* Frozen frame — captured image displayed after successful action */}
+                {frozenFrame && (
+                    <div className="absolute inset-0">
+                        <img src={frozenFrame} alt="Captured frame" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 pointer-events-none p-3 flex flex-col justify-between text-[10px] font-mono text-white select-none">
+                            <div className="flex justify-between items-start">
+                                <div className="bg-emerald-900/70 px-2 py-1 rounded backdrop-blur-xs flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                    <span>CAPTURED</span>
+                                </div>
+                                <div className="bg-slate-900/60 px-2 py-1 rounded backdrop-blur-xs">
+                                    <span>FROZEN</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Clean CCTV-style overlay */}
-                {status === "live" && (
+                {status === "live" && !frozenFrame && (
                     <div className="absolute inset-0 pointer-events-none p-3 flex flex-col justify-between text-[10px] font-mono text-white select-none">
                         <div className="flex justify-between items-start">
                             <div className="bg-slate-900/60 px-2 py-1 rounded backdrop-blur-xs flex items-center gap-1.5">

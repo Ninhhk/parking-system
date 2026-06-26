@@ -2,6 +2,11 @@
 
 import FormField from "../common/FormField";
 
+const CASUAL_ENTRY_MODE_OPTIONS = [
+    { value: "session_ticket", label: "Session ticket" },
+    { value: "issued_card", label: "Issued card" },
+];
+
 /**
  * Parking lot form component for create/edit
  *
@@ -45,6 +50,23 @@ export default function ParkingLotForm({ form, onChange, managerOptions, isEditM
                     onChange={onChange}
                     options={managerOptions}
                 />
+            )}
+
+            {isEditMode && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                    <h3 className="text-sm font-semibold text-gray-800">Lane hardware / commissioning</h3>
+                    <p className="mb-2 text-xs text-gray-500">
+                        Commissioning config tied to lane hardware, not a daily switch.
+                    </p>
+                    <FormField
+                        name="casual_entry_mode"
+                        label="Casual entry mode"
+                        type="select"
+                        value={form.casual_entry_mode || ""}
+                        onChange={onChange}
+                        options={CASUAL_ENTRY_MODE_OPTIONS}
+                    />
+                </div>
             )}
         </>
     );

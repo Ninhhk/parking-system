@@ -497,14 +497,6 @@ describe("Check-in Concurrency Tests", () => {
 
     describe("Monthly Subscription with Capacity", () => {
         test("monthly subscription vehicles should still respect capacity limits", async () => {
-            // Create monthly subscription
-            const subResult = await pool.query(
-                `INSERT INTO monthlysubs (license_plate, vehicle_type, start_date, end_date, owner_name, owner_phone)
-                 VALUES ($1, $2, CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days', $3, $4)
-                 RETURNING sub_id`,
-                ["MONTHLY1", "car", "Monthly Owner", "123456"]
-            );
-
             // Fill lot to capacity with regular vehicles
             await sessionsRepo.startSession({
                 lot_id: testLotId,
@@ -528,9 +520,6 @@ describe("Check-in Concurrency Tests", () => {
             });
 
             expect(result).toBeNull();
-
-            // Clean up
-            await pool.query("DELETE FROM monthlysubs WHERE sub_id = $1", [subResult.rows[0].sub_id]);
         });
     });
 });

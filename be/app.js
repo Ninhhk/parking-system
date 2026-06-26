@@ -22,6 +22,7 @@ const adminRoutes = require("./routes/admin.routes");
 const employeeRoutes = require("./routes/employee.routes");
 const paymentRoutes = require("./routes/payment.routes");
 const edgeRoutes = require("./routes/edge.routes");
+const gateStateController = require("./controllers/gate.state.controller");
 
 // Initialize express app
 const app = express();
@@ -44,7 +45,7 @@ app.use(
     cors({
         origin: allowedOrigins,
         credentials: true,
-        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization", "x-edge-api-key"],
     })
 );
@@ -84,6 +85,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/employee", employeeRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/edge", edgeRoutes);
+app.get("/api/gate-state/:laneId", gateStateController.getState);
+app.post("/api/gate-state/:laneId", gateStateController.setState);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

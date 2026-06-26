@@ -16,6 +16,12 @@ exports.getActiveConfig = async (vehicleType, referenceTime) => {
     const row = result.rows[0];
     return {
         ...row,
+        // node-postgres returns NUMERIC/DECIMAL columns as strings. Coerce the
+        // numeric fee fields to numbers so rules that use "+" (penalty, daily cap)
+        // perform arithmetic instead of string concatenation.
+        hourly_rate:      Number(row.hourly_rate),
+        daily_cap_amount: Number(row.daily_cap_amount),
+        penalty_fee:      Number(row.penalty_fee),
         tiers:        row.tiers        || [],
         time_windows: row.time_windows || [],
     };
@@ -23,10 +29,11 @@ exports.getActiveConfig = async (vehicleType, referenceTime) => {
 
 exports.getAllVersions = async (vehicleType) => {
     const result = await pool.query(
-        `SELECT *
-         FROM fee_config_versions
-         WHERE vehicle_type = $1
-         ORDER BY effective_from DESC`,
+        `SELECT fcv.*, u.username AS created_by_username
+         FROM fee_config_versions fcv
+         LEFT JOIN users u ON fcv.created_by = u.user_id
+         WHERE fcv.vehicle_type = $1
+         ORDER BY fcv.effective_from DESC`,
         [vehicleType]
     );
     return result.rows;

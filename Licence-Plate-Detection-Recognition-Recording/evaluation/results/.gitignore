@@ -1,0 +1,5 @@
+# Generated evaluation results — reproduce via commands in ../README.md
+*.csv
+*.json
+*.yaml
+*.md

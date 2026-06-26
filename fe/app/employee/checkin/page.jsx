@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getGatewayLaneConfig, getSubscriptionByCard, checkInByRfid, checkInVehicle, fetchMyLot } from "@/app/api/employee.client";
+import { fetchEmployeeGateSettings } from "@/app/api/admin.gateSettings.client";
 import { detectLicensePlate } from "@/app/api/employee.lpd.client";
 import KioskCameraPanel from "./components/KioskCameraPanel";
 import ReaderPanel from "./components/ReaderPanel";
@@ -52,8 +53,8 @@ export default function UnifiedCheckinPage() {
     const [laneConfig, setLaneConfig] = useState(null);
     const [laneConfigError, setLaneConfigError] = useState(null);
 
-    // Casual mode from lot read
-    const [casualMode, setCasualMode] = useState("session_ticket");
+    // Casual mode from lot read (app-wide default: issued_card)
+    const [casualMode, setCasualMode] = useState("issued_card");
 
     // Kiosk state machine
     const [kioskState, setKioskState] = useState(KIOSK_STATES.IDLE);
@@ -73,10 +74,12 @@ export default function UnifiedCheckinPage() {
 
     // Gate (simulated)
     const [gateState, setGateState] = useState("shut");
+    const [autoCloseDurationMs, setAutoCloseDurationMs] = useState(4000);
 
     // Result
     const [resultDetail, setResultDetail] = useState("");
     const [ticket, setTicket] = useState(null);
+    const [frozenFrame, setFrozenFrame] = useState(null);
 
     // Clock
     const [currentTime, setCurrentTime] = useState("");
@@ -84,6 +87,7 @@ export default function UnifiedCheckinPage() {
     // Refs
     const cameraRef = useRef(null);
     const gateTimerRef = useRef(null);
+    const gateContextRef = useRef(null); // "manual" | "hold" | null
     // Holds the in-flight submission so a capture-failure Retry/Proceed choice can resume it
     const pendingSubmitRef = useRef(null);
 
@@ -96,8 +100,14 @@ export default function UnifiedCheckinPage() {
             .then((data) => {
                 clearTimeout(timeoutId);
                 setLaneConfig(data);
-                const lpd = Array.isArray(data.allowed_trigger_modules) &&
-                    data.allowed_trigger_modules.includes("LPD");
+                // LPD status comes from the backend, which now reflects the admin
+                // Camera Management config (active plate camera + enabled LPD module),
+                // not just the static lane policy. Fall back to the lane policy only
+                // if the backend doesn't report the flag (older API).
+                const lpd = typeof data.lpd_enabled === "boolean"
+                    ? data.lpd_enabled
+                    : (Array.isArray(data.allowed_trigger_modules) &&
+                        data.allowed_trigger_modules.includes("LPD"));
                 setLpdEnabled(lpd);
             })
             .catch((err) => {
@@ -119,12 +129,25 @@ export default function UnifiedCheckinPage() {
     useEffect(() => {
         fetchMyLot()
             .then((lot) => {
-                const mode = lot?.casual_entry_mode || "session_ticket";
+                const mode = lot?.casual_entry_mode || "issued_card";
                 setCasualMode(mode);
             })
             .catch(() => {
-                // Default to session_ticket if lot read fails
-                setCasualMode("session_ticket");
+                // Default to issued_card if lot read fails (app-wide default)
+                setCasualMode("issued_card");
+            });
+    }, []);
+
+    // --- On mount: fetch gate auto-close setting ---
+    useEffect(() => {
+        fetchEmployeeGateSettings()
+            .then((data) => {
+                if (data?.auto_close_duration_seconds) {
+                    setAutoCloseDurationMs(data.auto_close_duration_seconds * 1000);
+                }
+            })
+            .catch((err) => {
+                console.warn("[Kiosk] Failed to fetch gate settings, using default 4000ms:", err.message);
             });
     }, []);
 
@@ -174,18 +197,26 @@ export default function UnifiedCheckinPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [casualMode, kioskState, laneConfig]);
 
+    // Close the gate UNLESS it's being held open. Hold = sticky open: it overrides
+    // every outcome-driven close (denied / error / capture-fail / auto-reset); only
+    // Manual Close exits hold (Req 4.3).
+    const closeGateUnlessHold = () => {
+        if (gateContextRef.current !== "hold") setGateState("shut");
+    };
+
     const resetKiosk = () => {
         setCardUid("");
         setSubscription(null);
         setResultDetail("");
         setTicket(null);
+        setFrozenFrame(null);
         setEntryType(null);
         setVehicleType("");
         setDetectedPlate(null);
         setPendingVehiclePick(false);
         pendingSubmitRef.current = null;
         setKioskState(KIOSK_STATES.IDLE);
-        setGateState("shut");
+        closeGateUnlessHold();
     };
 
     // --- Capture + LPD (Req 3.2, 3.3, 3.4, 3.5, 4.3, 4.5, 4.6) ---
@@ -252,7 +283,7 @@ export default function UnifiedCheckinPage() {
                 pendingSubmitRef.current = descriptor;
                 setKioskState(KIOSK_STATES.CAPTURE_FAILED);
                 setResultDetail("Camera capture failed — retry or proceed without image");
-                setGateState("shut");
+                closeGateUnlessHold();
                 return;
             }
             throw err;
@@ -272,7 +303,7 @@ export default function UnifiedCheckinPage() {
                     entry_lane_id: LANE_ID,
                     metadata_in: buildMetadata({ casual: false, noCameraEvidence }),
                 });
-                setResultDetail(`Welcome, ${descriptor.sub.owner_name}`);
+                setResultDetail(descriptor.sub.owner_name ? `Welcome, ${descriptor.sub.owner_name}` : "Monthly check-in OK");
             } else {
                 const payload = {
                     vehicle_type: descriptor.resolvedType,
@@ -295,6 +326,7 @@ export default function UnifiedCheckinPage() {
             pendingSubmitRef.current = null;
             setKioskState(KIOSK_STATES.SUCCESS);
             setTicket(res.ticket || null);
+            setFrozenFrame(imageUrl);
             setGateState("open");
         } catch (err) {
             pendingSubmitRef.current = null;
@@ -302,11 +334,11 @@ export default function UnifiedCheckinPage() {
             if (status === 409 || status === 422) {
                 setKioskState(KIOSK_STATES.DENIED);
                 setResultDetail(err.response?.data?.message || "Entry denied");
-                setGateState("shut");
+                closeGateUnlessHold();
             } else {
                 setKioskState(KIOSK_STATES.ERROR);
                 setResultDetail("Check-in failed");
-                setGateState("shut");
+                closeGateUnlessHold();
             }
         }
     };
@@ -354,8 +386,17 @@ export default function UnifiedCheckinPage() {
             // Active subscription found → subscriber path
             setEntryType("subscriber");
             setSubscription(sub);
-            setVehicleType(sub.vehicle_type);
-            await runSubmit({ kind: "subscriber", cardUid, sub });
+
+            // Resolve vehicle type: sub may provide it (legacy), else lane-fixed, else operator picks
+            const resolvedType = sub.vehicle_type || laneConfig?.vehicle_type || null;
+            if (!resolvedType) {
+                setVehicleType(null);
+                setPendingVehiclePick(true);
+                setKioskState(KIOSK_STATES.IDLE);
+                return;
+            }
+            setVehicleType(resolvedType);
+            await runSubmit({ kind: "subscriber", cardUid, sub: { ...sub, vehicle_type: resolvedType } });
         } catch (error) {
             clearTimeout(timeoutId);
 
@@ -375,13 +416,13 @@ export default function UnifiedCheckinPage() {
                     // session_ticket mode — card not recognized
                     setKioskState(KIOSK_STATES.DENIED);
                     setResultDetail("Card not recognized");
-                    setGateState("shut");
+                    closeGateUnlessHold();
                 }
             } else {
                 // System error (network/5xx/abort)
                 setKioskState(KIOSK_STATES.ERROR);
                 setResultDetail("System error — please try again");
-                setGateState("shut");
+                closeGateUnlessHold();
             }
         }
     };
@@ -415,12 +456,33 @@ export default function UnifiedCheckinPage() {
         }
     };
 
-    const handleManualGateOpen = () => {
+    // Hold-mode open: no timer started (Req 4.1, 4.2, 4.3)
+    const handleHoldOpen = () => {
+        if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
+        gateTimerRef.current = null;
         setGateState("open");
+        gateContextRef.current = "hold";
+    };
+
+    // Normal open: uses configured duration
+    // If in hold mode, no-op — hold takes priority (Req 4.5)
+    const handleManualGateOpen = () => {
+        if (gateContextRef.current === "hold") return;
+        setGateState("open");
+        gateContextRef.current = "manual";
         if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
         gateTimerRef.current = setTimeout(() => {
             setGateState("shut");
-        }, 5000);
+            gateContextRef.current = null;
+        }, autoCloseDurationMs);
+    };
+
+    // Close: works for both normal and hold mode (Req 4.4)
+    const handleManualGateClose = () => {
+        if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
+        gateTimerRef.current = null;
+        setGateState("shut");
+        gateContextRef.current = null;
     };
 
     const isScanning = kioskState === KIOSK_STATES.SCANNING;
@@ -465,7 +527,7 @@ export default function UnifiedCheckinPage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Left pane: Camera */}
                 <div className="lg:col-span-7 space-y-6 flex flex-col">
-                    <KioskCameraPanel ref={cameraRef} />
+                    <KioskCameraPanel ref={cameraRef} frozenFrame={frozenFrame} />
 
                     {/* No camera configured warning (degraded mode) */}
                     {laneConfig && laneConfig.has_camera === false && (
@@ -495,7 +557,10 @@ export default function UnifiedCheckinPage() {
                 <div className="lg:col-span-5 space-y-6">
                     <GateStatusPanel
                         isOpen={gateState === "open"}
+                        isHoldMode={gateContextRef.current === "hold"}
                         onManualOpen={handleManualGateOpen}
+                        onHoldOpen={handleHoldOpen}
+                        onManualClose={handleManualGateClose}
                     />
 
                     <ReaderPanel

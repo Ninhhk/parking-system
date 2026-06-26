@@ -49,7 +49,7 @@ This project now supports a prototype license plate capture & check‑in flow us
 - Check-in: `POST /api/employee/parking/entry` body: `{ license_plate, vehicle_type }`
 
 ## Normalization
-Incoming `license_plate` is sanitized server-side (`be/utils/licensePlate.js`) replacing common OCR confusions (`O→0, I→1, Z→2, S→5, B→8`), stripping invalid characters, collapsing hyphens.
+Incoming `license_plate` is sanitized server-side (`be/utils/licensePlate.js`), stripping invalid characters and collapsing hyphens. OCR confusions are corrected **position-aware** against the Vietnamese civilian plate shape (`<2 province digits><1-2 series letters [+ digit]><serial digits>`, e.g. `30A`, `30AB`, `19DE`, `90B2`): letter→digit (`O→0, I→1, Z→2, S→5, B→8`) at digit positions, digit→letter at series-letter positions. This preserves real series letters (e.g. `90-B2` stays `90B2` not `9082`; `30AB` stays `30AB` not `30A8`). Strings that don't match the shape are returned raw. The Python LPD normalizer (`Licence-Plate-Detection-Recognition-Recording/services/plate_normalizer.py`) mirrors this logic.
 
 ## Python Script Overview
 File: `plate-ocr/plate_capture.py`

@@ -17,14 +17,14 @@ function emptyForm() {
         effective_from: "",
         rounding_strategy: "ceil_hour",
         grace_period_minutes: 0,
-        hourly_rate: 0,
+        hourly_rate: 2000,
         daily_cap_enabled: false,
-        daily_cap_amount: 0,
+        daily_cap_amount: 2000,
         tiered_rate_enabled: false,
         tiers: [{ up_to_hours: "", rate_per_hour: "" }],
         time_of_day_enabled: false,
         time_windows: [{ start_time: "", end_time: "", rate_multiplier: "" }],
-        penalty_fee: 0,
+        penalty_fee: 2000,
     };
 }
 
@@ -280,10 +280,11 @@ function ConfigEditorForm({ onSaved }) {
                 <label className={labelCls}>Hourly rate</label>
                 <input
                     type="number"
-                    min={0}
-                    step="0.01"
+                    min={2000}
+                    step="1"
                     value={form.hourly_rate}
                     onChange={(e) => set("hourly_rate", e.target.value)}
+                    onWheel={(e) => e.currentTarget.blur()}
                     className={inputCls(fieldErrors, "hourly_rate")}
                 />
                 <FieldError errors={fieldErrors} field="hourly_rate" />
@@ -305,10 +306,11 @@ function ConfigEditorForm({ onSaved }) {
                         <label className={labelCls}>Daily cap amount</label>
                         <input
                             type="number"
-                            min={0}
-                            step="0.01"
+                            min={2000}
+                            step="1"
                             value={form.daily_cap_amount}
                             onChange={(e) => set("daily_cap_amount", e.target.value)}
+                            onWheel={(e) => e.currentTarget.blur()}
                             className={inputCls(fieldErrors, "daily_cap_amount")}
                         />
                         <FieldError errors={fieldErrors} field="daily_cap_amount" />
@@ -455,10 +457,11 @@ function ConfigEditorForm({ onSaved }) {
                 <label className={labelCls}>Penalty fee</label>
                 <input
                     type="number"
-                    min={0}
-                    step="0.01"
+                    min={2000}
+                    step="1"
                     value={form.penalty_fee}
                     onChange={(e) => set("penalty_fee", e.target.value)}
+                    onWheel={(e) => e.currentTarget.blur()}
                     className={inputCls(fieldErrors, "penalty_fee")}
                 />
                 <FieldError errors={fieldErrors} field="penalty_fee" />

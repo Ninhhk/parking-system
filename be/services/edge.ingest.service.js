@@ -5,6 +5,7 @@ const sessionsRepo = require("../repositories/employee.sessions.repo");
 const cameraService = require("./admin.camera.service");
 const { sanitizePlate } = require("../utils/licensePlate");
 const gatewayConfig = require("../config/edge_gateways.json");
+const { setState } = require("./gate.state.service");
 
 const LPD_TRIGGER = "LPD";
 const CAPACITY_FULL = "CAPACITY_FULL";
@@ -265,6 +266,11 @@ exports.ingestEvent = async (payload, options = {}) => {
                 client
             );
             await client.query("COMMIT");
+            setState(normalizedPayload.lane_id, {
+                status: "OPEN",
+                plate: sanitizePlate(normalizedPayload.trigger.plate || normalizedPayload.trigger.value || ""),
+                message: "Tạm biệt",
+            });
             return {
                 duplicate: false,
                 status: "SUCCESS",
@@ -359,6 +365,11 @@ exports.ingestEvent = async (payload, options = {}) => {
             );
 
             await client.query("COMMIT");
+            setState(normalizedPayload.lane_id, {
+                status: "OPEN",
+                plate: enrichedSession.license_plate || sanitizePlate(normalizedPayload.trigger.plate || ""),
+                message: "Mời vào",
+            });
             return {
                 duplicate: false,
                 status: "SUCCESS",
@@ -416,6 +427,11 @@ exports.ingestEvent = async (payload, options = {}) => {
         );
 
         await client.query("COMMIT");
+        setState(normalizedPayload.lane_id, {
+            status: "OPEN",
+            plate: session.license_plate || "",
+            message: "Mời vào",
+        });
         return {
             duplicate: false,
             status: "SUCCESS",

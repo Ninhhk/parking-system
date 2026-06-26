@@ -1,11 +1,11 @@
 const { pool } = require("../config/db");
 
-exports.createAttempt = async ({ sessionId, subId, intentId, provider, paymentMethod, amount }, client = pool) => {
+exports.createAttempt = async ({ sessionId, intentId, provider, paymentMethod, amount }, client = pool) => {
     const result = await client.query(
-        `INSERT INTO payment_attempts(session_id, sub_id, intent_id, provider, payment_method, status, amount)
-         VALUES ($1, $2, $3, $4, $5, 'CREATED', $6)
+        `INSERT INTO payment_attempts(session_id, intent_id, provider, payment_method, status, amount)
+         VALUES ($1, $2, $3, $4, 'CREATED', $5)
          RETURNING *`,
-        [sessionId, subId || null, intentId, provider, paymentMethod, amount]
+        [sessionId, intentId, provider, paymentMethod, amount]
     );
     return result.rows[0];
 };

@@ -1,6 +1,6 @@
 const { pool } = require("../config/db");
-const feeConfigRepo = require("./admin.feeConfig.repo");
-const { DEFAULT_PENALTY_FEE, UNKNOWN_GUEST_IDENTIFIER } = require("../config/constants");
+const newFeeConfigRepo = require("./feeConfig.repo");
+const { DEFAULT_PENALTY_FEE } = require("../config/constants");
 
 let parkingSessionsColumnsCache = null;
 
@@ -146,222 +146,6 @@ exports.getSession = async (sessionId) => {
     return result.rows[0];
 };
 
-exports.checkMonthlySub = async (license_plate, vehicle_type, current_date) => {
-    const query = `
-        SELECT * FROM MonthlySubs
-        WHERE license_plate = $1
-          AND vehicle_type  = $2
-          AND start_date   <= $3
-          AND end_date     >= $3
-    `;
-
-    const result = await pool.query(query, [license_plate, vehicle_type, current_date]);
-    return result.rows[0];
-};
-
-// card_uid column was added to MonthlySubs via db/init/010_add_card_uid_to_monthly_subs.sql
-exports.checkMonthlySubByCard = async (card_uid, vehicle_type, current_date) => {
-    const query = `
-        SELECT * FROM MonthlySubs
-        WHERE card_uid    = $1
-          AND vehicle_type = $2
-          AND start_date  <= $3
-          AND end_date    >= $3
-    `;
-    const result = await pool.query(query, [card_uid, vehicle_type, current_date]);
-    return result.rows[0];
-};
-
-exports.createPendingPayment = async (paymentData) => {
-    const { session_id, sub_id, total_amount } = paymentData;
-
-    // Changed "Payments" to "Payment" to match your database schema
-    const query = `
-        INSERT INTO Payment (
-            session_id,
-            sub_id,
-            payment_method,
-            total_amount
-        ) VALUES ($1, $2, 'PENDING', $3)
-        RETURNING *
-    `;
-
-    const result = await pool.query(query, [session_id, sub_id || null, total_amount]);
-
-    return result.rows[0];
-};
-
-exports.confirmPayment = async (paymentData) => {
-    // Start a transaction
-    const client = await pool.connect();
-
-    try {
-        await client.query("BEGIN");
-
-        const { payment_id, payment_method, session_id, is_lost } = paymentData;
-
-        // Update the payment - changed "Payments" to "Payment"
-        const updatePaymentQuery = `
-            UPDATE Payment
-            SET 
-                payment_method = $1,
-                payment_date = NOW()
-            WHERE payment_id = $2
-            RETURNING *
-        `;
-
-        const paymentResult = await client.query(updatePaymentQuery, [payment_method, payment_id]);
-
-        // Get session details
-        const sessionQuery = `
-            SELECT * FROM ParkingSessions
-            WHERE session_id = $1
-        `;
-
-        const sessionResult = await client.query(sessionQuery, [session_id]);
-        const session = sessionResult.rows[0];
-
-        // Update the session
-        const updateSessionQuery = `
-            UPDATE ParkingSessions
-            SET 
-                time_out = NOW(),
-                is_lost = $1
-            WHERE session_id = $2
-            RETURNING *
-        `;
-
-        const updatedSessionResult = await client.query(updateSessionQuery, [is_lost || false, session_id]);
-
-        // Update the parking lot vehicle count
-        const column = session.vehicle_type.toLowerCase() === "car" ? "current_car" : "current_bike";
-
-        const updateLotQuery = `
-            UPDATE ParkingLots
-            SET ${column} = GREATEST(${column} - 1, 0)
-            WHERE lot_id = $1
-            RETURNING *
-        `;
-
-        await client.query(updateLotQuery, [session.lot_id]);
-
-        // If lost ticket, create a report
-        if (is_lost) {
-            const lostTicketQuery = `
-                INSERT INTO LostTicketReport (
-                    session_id,
-                    guest_identification,
-                    guest_phone,
-                    penalty_fee
-                ) VALUES ($1, $2, $3, $4)
-            `;
-
-            // Use the penalty fee from the fee config or a default value
-            const penaltyFee = session.penalty_fee || DEFAULT_PENALTY_FEE;
-
-            await client.query(lostTicketQuery, [session_id, UNKNOWN_GUEST_IDENTIFIER, UNKNOWN_GUEST_IDENTIFIER, penaltyFee]);
-        }
-
-        // Commit the transaction
-        await client.query("COMMIT");
-
-        return {
-            payment: paymentResult.rows[0],
-            session: updatedSessionResult.rows[0],
-        };
-    } catch (error) {
-        // Rollback in case of error
-        await client.query("ROLLBACK");
-        throw error;
-    } finally {
-        // Release the client
-        client.release();
-    }
-};
-
-exports.createAndConfirmPayment = async (paymentData) => {
-    // Start a transaction
-    const client = await pool.connect();
-
-    try {
-        await client.query("BEGIN");
-
-        const { session_id, sub_id, total_amount, payment_method, is_lost } = paymentData;
-
-        // Create the payment
-        const createPaymentQuery = `
-            INSERT INTO Payment (
-                session_id,
-                sub_id,
-                payment_method,
-                total_amount,
-                payment_date
-            ) VALUES ($1, $2, $3, $4, NOW())
-            RETURNING *
-        `;
-
-        const paymentResult = await client.query(createPaymentQuery, [
-            session_id,
-            sub_id || null,
-            payment_method,
-            total_amount,
-        ]);
-
-        // Get session details
-        const sessionQuery = `
-            SELECT * FROM ParkingSessions
-            WHERE session_id = $1
-        `;
-
-        const sessionResult = await client.query(sessionQuery, [session_id]);
-        const session = sessionResult.rows[0];
-
-        // Update the session with time_out and parking_fee
-        const updateSessionQuery = `
-            UPDATE ParkingSessions
-            SET 
-                time_out = NOW(),
-                is_lost = $1,
-                parking_fee = $2
-            WHERE session_id = $3
-            RETURNING *
-        `;
-
-        const updatedSessionResult = await client.query(updateSessionQuery, [
-            is_lost || false,
-            total_amount,
-            session_id,
-        ]);
-
-        // Update the parking lot vehicle count
-        const column = session.vehicle_type.toLowerCase() === "car" ? "current_car" : "current_bike";
-
-        const updateLotQuery = `
-            UPDATE ParkingLots
-            SET ${column} = GREATEST(${column} - 1, 0)
-            WHERE lot_id = $1
-            RETURNING *
-        `;
-
-        await client.query(updateLotQuery, [session.lot_id]);
-
-        // Commit the transaction
-        await client.query("COMMIT");
-
-        return {
-            payment: paymentResult.rows[0],
-            session: updatedSessionResult.rows[0],
-        };
-    } catch (error) {
-        // Rollback in case of error
-        await client.query("ROLLBACK");
-        throw error;
-    } finally {
-        // Release the client
-        client.release();
-    }
-};
-
 exports.getActiveSessionsByLot = async (lotId) => {
     const query = `
         SELECT * FROM ParkingSessions
@@ -410,7 +194,7 @@ exports.getActiveSessionsForOps = async ({ laneId, q, page, pageSize } = {}, cli
     const offsetIndex = params.length;
 
     const result = await client.query(
-        `SELECT ps.*
+        `SELECT ps.*, COUNT(*) OVER() AS total_count
          FROM ParkingSessions ps
          WHERE ${conditions.join(" AND ")}
          ORDER BY ps.time_in DESC, ps.session_id DESC
@@ -419,7 +203,17 @@ exports.getActiveSessionsForOps = async ({ laneId, q, page, pageSize } = {}, cli
         params
     );
 
-    return result.rows;
+    const totalCount = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+
+    return {
+        rows: result.rows.map(({ total_count, ...row }) => row),
+        pagination: {
+            page: normalizedPage,
+            pageSize: normalizedPageSize,
+            totalCount,
+            totalPages: Math.ceil(totalCount / normalizedPageSize),
+        },
+    };
 };
 
 // Employee reports a lost ticket (standalone, not during checkout)
@@ -438,10 +232,10 @@ exports.reportLostTicket = async ({ session_id, guest_identification, guest_phon
     }
 
     // Assume ticket_type is 'daily' unless you have a field for it
-    const ticket_type = session.is_monthly ? "monthly" : "daily";
     const vehicle_type = session.vehicle_type;
-    // Get penalty fee from FeeConfigs
-    const penalty_fee = await feeConfigRepo.getPenaltyFee(ticket_type, vehicle_type);
+    // Get penalty fee from the active fee_config_versions (same source as fee engine checkout)
+    const config = await newFeeConfigRepo.getActiveConfig(vehicle_type, session.time_in);
+    const penalty_fee = config ? config.penalty_fee : DEFAULT_PENALTY_FEE;
     const query = `
         INSERT INTO LostTicketReport (
             session_id,

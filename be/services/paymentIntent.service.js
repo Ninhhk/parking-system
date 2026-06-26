@@ -7,6 +7,7 @@ const paymentLedgerRepo = require("../repositories/paymentLedger.repo");
 const { calculateAndValidateFee } = require("./feeCalculation.service");
 const { PAYOS_DEFAULT_RETURN_URL, PAYOS_DEFAULT_CANCEL_URL, PAYOS_QR_TTL_MINUTES } = require("../config/constants");
 const paymentMetrics = require("../observability/payment.metrics");
+const { setState } = require("./gate.state.service");
 
 const toAttemptProjection = (attempt) => {
     if (!attempt) {
@@ -893,6 +894,10 @@ exports.processWebhook = async (payload) => {
         );
 
         await client.query("COMMIT");
+        // Trigger gate light for exit after successful card payment
+        if (finalized && session.entry_lane_id) {
+            setState(session.entry_lane_id, { status: "OPEN", plate: session.license_plate || "", message: "Tạm biệt" });
+        }
         paymentMetrics.increment("webhook_success");
         if (!finalized) {
             paymentMetrics.increment("webhook_replay");

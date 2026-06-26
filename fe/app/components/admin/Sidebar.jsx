@@ -14,8 +14,10 @@ import {
     HiQuestionMarkCircle,
     HiSpeakerphone,
     HiVideoCamera,
+    HiCreditCard,
+    HiLockOpen,
 } from "react-icons/hi";
-import { HiCheckBadge, HiDocumentCurrencyDollar, HiPresentationChartLine, HiSpeakerXMark } from "react-icons/hi2";
+import { HiDocumentCurrencyDollar, HiPresentationChartLine, HiSpeakerXMark, HiOutlineBolt } from "react-icons/hi2";
 
 import { logout } from "../../api/auth.client";
 import { useUser } from "../providers/UserProvider";
@@ -51,14 +53,14 @@ const Sidebar = () => {
             icon: <HiOfficeBuilding className="mr-3 h-6 w-6" />,
         },
         {
+            name: "Card Pool",
+            href: "/admin/parking-cards",
+            icon: <HiCreditCard className="mr-3 h-6 w-6" />,
+        },
+        {
             name: "Users",
             href: "/admin/users",
             icon: <HiIdentification className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Monthly subs",
-            href: "/admin/monthly-subs",
-            icon: <HiCheckBadge className="mr-3 h-6 w-6" />,
         },
         {
             name: "Payments",
@@ -76,6 +78,16 @@ const Sidebar = () => {
             icon: <HiPresentationChartLine className="mr-3 h-6 w-6" />,
         },
         {
+            name: "Session Audit",
+            href: "/admin/audit",
+            icon: <HiDocumentCurrencyDollar className="mr-3 h-6 w-6" />,
+        },
+        {
+            name: "Edge Ops",
+            href: "/admin/edge-ops",
+            icon: <HiOutlineBolt className="mr-3 h-6 w-6" />,
+        },
+        {
             name: "Cameras",
             href: "/admin/cameras",
             icon: <HiVideoCamera className="mr-3 h-6 w-6" />,
@@ -84,6 +96,16 @@ const Sidebar = () => {
             name: "Pricing Engine",
             href: "/admin/fee-config",
             icon: <HiCog className="mr-3 h-6 w-6" />,
+        },
+        {
+            name: "Gate Settings",
+            href: "/admin/gate-settings",
+            icon: <HiLockOpen className="mr-3 h-6 w-6" />,
+        },
+        {
+            name: "Checkout Settings",
+            href: "/admin/checkout-settings",
+            icon: <HiCreditCard className="mr-3 h-6 w-6" />,
         },
         {
             name: "Notifications",

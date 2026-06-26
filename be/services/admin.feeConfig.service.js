@@ -3,14 +3,14 @@ const feeConfigRepo = require("../repositories/feeConfig.repo");
 function validateFeeConfig(data) {
     const errors = [];
 
-    if (data.hourly_rate < 0)
-        errors.push({ field: "hourly_rate", message: "Must be >= 0" });
+    if (!Number.isInteger(data.hourly_rate) || data.hourly_rate < 2000)
+        errors.push({ field: "hourly_rate", message: "Must be a whole number >= 2000" });
 
-    if (data.daily_cap_amount < 0)
-        errors.push({ field: "daily_cap_amount", message: "Must be >= 0" });
+    if (!Number.isInteger(data.daily_cap_amount) || data.daily_cap_amount < 2000)
+        errors.push({ field: "daily_cap_amount", message: "Must be a whole number >= 2000" });
 
-    if (data.penalty_fee < 0)
-        errors.push({ field: "penalty_fee", message: "Must be >= 0" });
+    if (!Number.isInteger(data.penalty_fee) || data.penalty_fee < 2000)
+        errors.push({ field: "penalty_fee", message: "Must be a whole number >= 2000" });
 
     if (data.grace_period_minutes < 0 || data.grace_period_minutes > 60)
         errors.push({ field: "grace_period_minutes", message: "Must be between 0 and 60" });

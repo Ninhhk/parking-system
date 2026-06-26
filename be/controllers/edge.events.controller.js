@@ -166,7 +166,7 @@ exports.retryEvent = async (req, res) => {
 
 exports.listEvents = async (req, res) => {
     try {
-        const rows = await edgeEventsRepo.listEvents({
+        const result = await edgeEventsRepo.listEvents({
             status: req.query.status,
             lane: req.query.lane,
             trigger: req.query.trigger,
@@ -179,7 +179,10 @@ exports.listEvents = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            data: rows,
+            data: {
+                events: result.rows,
+                pagination: result.pagination,
+            },
         });
     } catch (error) {
         console.error("List edge events error:", error);
@@ -223,7 +226,7 @@ exports.getEventDetail = async (req, res) => {
 
 exports.getActiveSessions = async (req, res) => {
     try {
-        const rows = await sessionsRepo.getActiveSessionsForOps({
+        const result = await sessionsRepo.getActiveSessionsForOps({
             laneId: req.query.laneId,
             q: req.query.q,
             page: req.query.page,
@@ -232,7 +235,10 @@ exports.getActiveSessions = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            data: rows,
+            data: {
+                sessions: result.rows,
+                pagination: result.pagination,
+            },
         });
     } catch (error) {
         console.error("Get active sessions for ops error:", error);

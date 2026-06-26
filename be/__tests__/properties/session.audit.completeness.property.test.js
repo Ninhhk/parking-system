@@ -7,8 +7,8 @@ const fc = require("fast-check");
  * Tests that every session returned by getAuditSessions includes ALL required fields
  * as defined keys, even when underlying values are null.
  *
- * Required fields: session_id, license_plate, vehicle_type, time_in, time_out,
- *                  lot_name, parking_fee, status, image_in_url, image_out_url
+ * Required fields: session_id, license_plate, card_uid, vehicle_type, is_monthly,
+ *                  time_in, time_out, lot_name, parking_fee, status, image_in_url, image_out_url
  */
 
 const { getAuditSessions } = require("../../services/session.audit.service");
@@ -25,6 +25,10 @@ const sessionRowArb = fc.record({
         fc.stringMatching(/^[a-zA-Z0-9\-.]{1,20}$/),
         fc.constant(null)
     ),
+    card_uid: fc.oneof(
+        fc.stringMatching(/^[a-zA-Z0-9\-]{1,20}$/),
+        fc.constant(null)
+    ),
     vehicle_type: fc.oneof(fc.constantFrom("car", "bike", "truck"), fc.constant(null)),
     lot_name: fc.oneof(
         fc.stringMatching(/^[a-zA-Z0-9 ]{1,30}$/),
@@ -34,6 +38,7 @@ const sessionRowArb = fc.record({
     time_out: fc.oneof(fc.integer({ min: 946684800000, max: 1924905600000 }).map(ts => new Date(ts).toISOString()), fc.constant(null)),
     parking_fee: fc.oneof(fc.integer({ min: 0, max: 500000 }), fc.constant(null)),
     is_lost: fc.boolean(),
+    is_monthly: fc.boolean(),
     image_in_url: fc.oneof(fc.constant("images/entry_123.jpg"), fc.constant(null)),
     image_out_url: fc.oneof(fc.constant("images/exit_456.jpg"), fc.constant(null)),
 });
@@ -41,7 +46,9 @@ const sessionRowArb = fc.record({
 const REQUIRED_FIELDS = [
     "session_id",
     "license_plate",
+    "card_uid",
     "vehicle_type",
+    "is_monthly",
     "time_in",
     "time_out",
     "lot_name",

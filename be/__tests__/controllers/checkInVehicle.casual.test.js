@@ -102,7 +102,7 @@ describe("checkInVehicle casual identity + pool validation", () => {
         expect(sessionsRepo.startSession).not.toHaveBeenCalled();
     });
 
-    // Requirement 9.2 / 9.4: issued-card casual, card not in pool -> 422 "Card not recognized"
+    // Requirement 8.2: issued-card casual, card not in pool -> 422 "Card not recognized"
     it("returns 422 'Card not recognized' when card_uid is not in the pool", async () => {
         const req = {
             body: {
@@ -117,7 +117,7 @@ describe("checkInVehicle casual identity + pool validation", () => {
 
         await controller.checkInVehicle(req, res);
 
-        expect(parkingCardsRepo.getPoolCard).toHaveBeenCalledWith(5, "CARD-UNKNOWN");
+        expect(parkingCardsRepo.getPoolCard).toHaveBeenCalledWith("CARD-UNKNOWN");
         expect(res.status).toHaveBeenCalledWith(422);
         expect(res.json).toHaveBeenCalledWith({
             success: false,
@@ -126,7 +126,7 @@ describe("checkInVehicle casual identity + pool validation", () => {
         expect(sessionsRepo.startSession).not.toHaveBeenCalled();
     });
 
-    // Requirement 9.6: issued-card casual, pool card status "lost" -> 409 "Card unavailable"
+    // Requirement 8.3: issued-card casual, pool card status "lost" -> 409 "Card unavailable"
     it("returns 409 'Card unavailable' when the pool card status is lost", async () => {
         const req = {
             body: {
@@ -145,7 +145,7 @@ describe("checkInVehicle casual identity + pool validation", () => {
 
         await controller.checkInVehicle(req, res);
 
-        expect(parkingCardsRepo.getPoolCard).toHaveBeenCalledWith(5, "CARD-LOST");
+        expect(parkingCardsRepo.getPoolCard).toHaveBeenCalledWith("CARD-LOST");
         expect(res.status).toHaveBeenCalledWith(409);
         expect(res.json).toHaveBeenCalledWith({
             success: false,
@@ -154,7 +154,35 @@ describe("checkInVehicle casual identity + pool validation", () => {
         expect(sessionsRepo.startSession).not.toHaveBeenCalled();
     });
 
-    // Requirement 9.2: issued-card casual, available pool card -> proceeds to session creation
+    // Requirement 8.4: issued-card casual, pool card assigned to a different lot -> 422
+    it("returns 422 'Card not valid at this lot' when the pool card belongs to another lot", async () => {
+        const req = {
+            body: {
+                vehicle_type: "car",
+                card_uid: "CARD-OTHER-LOT",
+                metadata_in: { entry_type: "casual" },
+            },
+            session: { user: { user_id: 11 } },
+        };
+        const res = makeRes();
+        parkingCardsRepo.getPoolCard.mockResolvedValue({
+            card_uid: "CARD-OTHER-LOT",
+            lot_id: 7, // assigned to a different lot than the employee's lot (5)
+            status: "available",
+        });
+
+        await controller.checkInVehicle(req, res);
+
+        expect(parkingCardsRepo.getPoolCard).toHaveBeenCalledWith("CARD-OTHER-LOT");
+        expect(res.status).toHaveBeenCalledWith(422);
+        expect(res.json).toHaveBeenCalledWith({
+            success: false,
+            message: "Card not valid at this lot",
+        });
+        expect(sessionsRepo.startSession).not.toHaveBeenCalled();
+    });
+
+    // Requirement 8.1: issued-card casual, available pool card -> proceeds to session creation
     it("proceeds to session creation when the pool card is available", async () => {
         const req = {
             body: {
@@ -174,7 +202,7 @@ describe("checkInVehicle casual identity + pool validation", () => {
 
         await controller.checkInVehicle(req, res);
 
-        expect(parkingCardsRepo.getPoolCard).toHaveBeenCalledWith(5, "CARD-OK");
+        expect(parkingCardsRepo.getPoolCard).toHaveBeenCalledWith("CARD-OK");
         expect(sessionsRepo.startSession).toHaveBeenCalledWith(
             expect.objectContaining({ card_uid: "CARD-OK" })
         );

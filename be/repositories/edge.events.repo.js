@@ -169,7 +169,7 @@ exports.listEvents = async ({ status, lane, laneId, trigger, triggerType, from, 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const result = await client.query(
-        `SELECT *
+        `SELECT *, COUNT(*) OVER() AS total_count
          FROM edge_events
          ${whereClause}
          ORDER BY occurred_at DESC, edge_event_id DESC
@@ -178,5 +178,15 @@ exports.listEvents = async ({ status, lane, laneId, trigger, triggerType, from, 
         params
     );
 
-    return result.rows;
+    const totalCount = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+
+    return {
+        rows: result.rows.map(({ total_count, ...row }) => row),
+        pagination: {
+            page: normalizedPage,
+            pageSize: normalizedPageSize,
+            totalCount,
+            totalPages: Math.ceil(totalCount / normalizedPageSize),
+        },
+    };
 };

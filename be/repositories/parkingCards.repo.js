@@ -1,32 +1,215 @@
 const { pool } = require("../config/db");
 
 /**
- * Look up a pool card by lot and card UID.
+ * Look up a pool card by its global card UID.
  * Returns the row ({ card_uid, lot_id, status, created_at }) or null if not found.
  * The "issued" state is derived by the caller (active session with that card_uid),
- * not by this function.
+ * not by this function. The Assigned_Lot check (lot_id NULL or matching) is also
+ * applied at the call site under the global identity model.
  */
-async function getPoolCard(lotId, cardUid) {
+async function getPoolCard(cardUid) {
     const query = `
-        SELECT card_uid, lot_id, status, created_at
+        SELECT card_uid, lot_id, status, created_at, is_monthly, monthly_end_date
         FROM parking_cards
-        WHERE lot_id = $1 AND card_uid = $2
+        WHERE card_uid = $1
         LIMIT 1
     `;
 
-    const result = await pool.query(query, [lotId, cardUid]);
+    const result = await pool.query(query, [cardUid]);
     return result.rows[0] || null;
 }
 
 /**
- * Mark a pool card as lost.
+ * Mark a pool card as lost, keyed by its global card UID.
  * Called when a session bound to this card is finalized as a lost ticket.
  */
-async function markLost(lotId, cardUid) {
+async function markLost(cardUid) {
     await pool.query(
-        "UPDATE parking_cards SET status = 'lost' WHERE lot_id = $1 AND card_uid = $2",
-        [lotId, cardUid]
+        "UPDATE parking_cards SET status = 'lost' WHERE card_uid = $1",
+        [cardUid]
     );
 }
 
-module.exports = { getPoolCard, markLost };
+/**
+ * Reset a pool card back to available, but only if it's currently lost.
+ * Guard prevents overwriting a different future status (forward-compatible).
+ * Called when an admin/employee removes a lost-ticket report (undo of markLost).
+ */
+async function markAvailableIfLost(cardUid) {
+    const result = await pool.query(
+        "UPDATE parking_cards SET status = 'available' WHERE card_uid = $1 AND status = 'lost' RETURNING card_uid",
+        [cardUid]
+    );
+    return result.rowCount > 0;
+}
+
+/**
+ * List pool cards with their assigned-lot name (NULL lot_id = shared card).
+ * When a non-empty search string is provided, only cards whose card_uid or
+ * lot_name contains it (case-insensitive) are returned. Order is stable.
+ */
+async function listPoolCards(q) {
+    const filter = typeof q === "string" && q.trim() !== "" ? q.trim() : null;
+
+    const query = `
+        SELECT pc.card_uid, pc.lot_id, pc.status, pc.created_at, pc.is_monthly, pc.monthly_end_date, pl.lot_name
+        FROM parking_cards pc
+        LEFT JOIN parkinglots pl ON pc.lot_id = pl.lot_id
+        WHERE $1::text IS NULL
+           OR pc.card_uid ILIKE '%' || $1 || '%'
+           OR pl.lot_name ILIKE '%' || $1 || '%'
+        ORDER BY pc.created_at DESC, pc.card_uid
+    `;
+
+    const result = await pool.query(query, [filter]);
+    return result.rows;
+}
+
+/**
+ * Insert a new pool card.
+ * Pass lot = null for a shared card (valid at any lot).
+ * Surfaces unique (23505) / foreign-key (23503) violations to the caller.
+ */
+async function insertPoolCard(uid, lot, status = "available", client = pool) {
+    const query = `
+        INSERT INTO parking_cards (card_uid, lot_id, status)
+        VALUES ($1, $2, $3)
+        RETURNING card_uid, lot_id, status, created_at
+    `;
+
+    const result = await client.query(query, [uid, lot, status]);
+    return result.rows[0];
+}
+
+/**
+ * Return a Set of card_uids that already exist in parking_cards.
+ */
+async function getExistingCardUids(uids, client = pool) {
+    if (!uids.length) return new Set();
+    const result = await client.query(
+        "SELECT card_uid FROM parking_cards WHERE card_uid = ANY($1::text[])",
+        [uids]
+    );
+    return new Set(result.rows.map(r => r.card_uid));
+}
+
+/**
+ * Return a Set of lot_ids that exist in parkinglots.
+ */
+async function getExistingLotIds(lotIds, client = pool) {
+    if (!lotIds.length) return new Set();
+    const result = await client.query(
+        "SELECT lot_id FROM parkinglots WHERE lot_id = ANY($1::int[])",
+        [lotIds]
+    );
+    return new Set(result.rows.map(r => r.lot_id));
+}
+
+/**
+ * Update a pool card's status, keyed by card UID.
+ * Returns the updated row, or null when no card matched (0 rows).
+ */
+async function setStatus(uid, status) {
+    const query = `
+        UPDATE parking_cards
+        SET status = $2
+        WHERE card_uid = $1
+        RETURNING card_uid, lot_id, status, created_at
+    `;
+
+    const result = await pool.query(query, [uid, status]);
+    return result.rows[0] || null;
+}
+
+/**
+ * Delete a pool card, keyed by card UID.
+ * Returns the deleted row, or null when no card matched (0 rows).
+ */
+async function deletePoolCard(uid) {
+    const query = `
+        DELETE FROM parking_cards
+        WHERE card_uid = $1
+        RETURNING card_uid, lot_id, status, created_at
+    `;
+
+    const result = await pool.query(query, [uid]);
+    return result.rows[0] || null;
+}
+
+/**
+ * Whether a card UID currently backs an active parking session.
+ * Reuses the exact predicate of the uq_active_session_card_uid partial index
+ * (time_out IS NULL AND card_uid IS NOT NULL) — no new concurrency mechanism.
+ */
+async function hasActiveSession(uid) {
+    const query = `
+        SELECT 1
+        FROM parkingsessions
+        WHERE card_uid = $1 AND time_out IS NULL AND card_uid IS NOT NULL
+        LIMIT 1
+    `;
+
+    const result = await pool.query(query, [uid]);
+    return result.rowCount > 0;
+}
+
+/**
+ * Pool inventory counts: total cards, and how many are available vs lost.
+ * Counts are returned as integers.
+ */
+async function getInventoryCounts() {
+    const query = `
+        SELECT
+            COUNT(*)                                  AS total,
+            COUNT(*) FILTER (WHERE status = 'available') AS available,
+            COUNT(*) FILTER (WHERE status = 'lost')      AS lost
+        FROM parking_cards
+    `;
+
+    const result = await pool.query(query);
+    const row = result.rows[0];
+    return {
+        total: parseInt(row.total, 10),
+        available: parseInt(row.available, 10),
+        lost: parseInt(row.lost, 10),
+    };
+}
+
+/**
+ * Toggle monthly subscription state on a pool card.
+ * Returns the updated row, or null when no card matched (0 rows).
+ *
+ * @param {string} cardUid - Card UID
+ * @param {Object} payload
+ * @param {boolean} payload.is_monthly - Enable or disable monthly
+ * @param {string|null} payload.monthly_end_date - YYYY-MM-DD or null
+ * @returns {Object|null}
+ */
+async function updateMonthly(cardUid, { is_monthly, monthly_end_date }, client = pool) {
+    const query = `
+        UPDATE parking_cards
+        SET is_monthly = $2,
+            monthly_end_date = $3
+        WHERE card_uid = $1
+        RETURNING card_uid, lot_id, status, created_at, is_monthly, monthly_end_date
+    `;
+
+    const result = await client.query(query, [cardUid, is_monthly, monthly_end_date || null]);
+    return result.rows[0] || null;
+}
+
+
+module.exports = {
+    getPoolCard,
+    markLost,
+    markAvailableIfLost,
+    listPoolCards,
+    insertPoolCard,
+    setStatus,
+    deletePoolCard,
+    hasActiveSession,
+    getInventoryCounts,
+    updateMonthly,
+    getExistingCardUids,
+    getExistingLotIds,
+};

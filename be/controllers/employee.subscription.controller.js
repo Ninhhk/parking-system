@@ -1,8 +1,13 @@
-const { getActiveSubscriptionByCard } = require("../services/employee.subscription.service");
+const parkingCardsRepo = require("../repositories/parkingCards.repo");
+const { deriveEffectiveMonthly } = require("../services/issuedCardEntry");
 
 /**
  * GET /api/employee/subscription/by-card/:card_uid
- * Returns the active monthly subscription for a given card UID.
+ * Returns whether the card has an active monthly subscription (card-pool-derived).
+ * The kiosk uses this to decide "subscriber" vs "casual_card" path.
+ *
+ * Response shape: { monthly: true } when effective monthly.
+ * 404 when card is not monthly (or card doesn't exist).
  */
 exports.getByCard = async (req, res) => {
     try {
@@ -15,9 +20,9 @@ exports.getByCard = async (req, res) => {
             });
         }
 
-        const subscription = await getActiveSubscriptionByCard(card_uid);
+        const poolCard = await parkingCardsRepo.getPoolCard(card_uid.trim());
 
-        if (!subscription) {
+        if (!poolCard || !deriveEffectiveMonthly(poolCard)) {
             return res.status(404).json({
                 success: false,
                 message: "No active subscription found for this card",
@@ -26,7 +31,11 @@ exports.getByCard = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            data: subscription,
+            data: {
+                monthly: true,
+                // vehicle_type no longer stored on cards — resolved by lane config or operator pick
+                vehicle_type: null,
+            },
         });
     } catch (error) {
         console.error("Subscription lookup error:", error);

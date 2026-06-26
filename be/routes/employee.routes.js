@@ -14,6 +14,8 @@ const edgeController = require("../controllers/employee.edge.controller");
 const gatewayController = require("../controllers/employee.gateway.controller");
 const sessionAuditController = require("../controllers/session.audit.controller");
 const subscriptionController = require("../controllers/employee.subscription.controller");
+const gateSettingsController = require("../controllers/admin.gateSettings.controller");
+const checkoutSettingsController = require("../controllers/admin.checkoutSettings.controller");
 
 // Audit route — accessible by both employee and admin roles
 router.get(
@@ -21,6 +23,22 @@ router.get(
     authMiddleware.isAuthenticated,
     authMiddleware.hasRole(["employee", "admin"]),
     sessionAuditController.getAuditSessions
+);
+
+// Gate settings — accessible by authenticated employees (and admin)
+router.get(
+    "/gate-settings",
+    authMiddleware.isAuthenticated,
+    authMiddleware.hasRole(["employee", "admin"]),
+    gateSettingsController.getGateSettings
+);
+
+// Checkout settings — accessible by authenticated employees (and admin)
+router.get(
+    "/checkout-settings",
+    authMiddleware.isAuthenticated,
+    authMiddleware.hasRole(["employee", "admin"]),
+    checkoutSettingsController.getCheckoutSettings
 );
 
 router.use(authMiddleware.isAuthenticated, authMiddleware.hasRole(["employee"]));
@@ -45,14 +63,17 @@ router.delete("/lost-tickets/:session_id", sessionsController.deleteLostTicket);
 // New entry/exit API endpoints
 router.post("/parking/entry", sessionsController.checkInVehicle);
 router.post("/parking/entry/rfid", sessionsController.checkInByRfid);
+router.get("/parking/exit/by-card/:card_uid", sessionsController.findActiveSessionByCard);
 router.get("/parking/exit/:session_id", sessionsController.initiateCheckout);
 router.post("/parking/exit/confirm", sessionsController.confirmCheckout);
+router.post("/parking/exit/:session_id/monthly-checkout", sessionsController.confirmMonthlyCheckout);
 router.post("/parking/exit/:session_id/payment-intents", employeePaymentController.createIntent);
 router.post(
     "/parking/exit/:session_id/payment-intents/regenerate",
     employeePaymentController.regenerateIntent
 );
 router.get("/parking/exit/:session_id/payment-status", employeePaymentController.getPaymentStatus);
+router.post("/parking/exit/:session_id/exit-image", sessionsController.uploadExitImage);
 router.post("/parking/edge/checkin-event", edgeController.ingestCheckinEvent);
 router.get("/sessions/:session_id/image-presigned", sessionsController.getImagePresignedUrl);
 

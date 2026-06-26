@@ -35,10 +35,20 @@ describe("Feature: unified-checkin-kiosk, Property 8: Gateway Config API — exi
         await fc.assert(
             fc.asyncProperty(
                 fc.constantFrom(...existingLaneIds),
-                // Camera check returns an arbitrary rowCount; has_camera derives from it.
+                // has_camera derives from the camera-existence query rowCount.
                 fc.integer({ min: 0, max: 5 }),
-                async (laneId, rowCount) => {
-                    pool.query.mockResolvedValue({ rowCount });
+                // lpd_enabled derives from the LPD-plate-camera query rowCount.
+                fc.integer({ min: 0, max: 5 }),
+                async (laneId, cameraRowCount, lpdRowCount) => {
+                    // The controller issues up to two queries: a plain camera-existence
+                    // check, and (only for LPD-permitting lanes) a check for an active
+                    // plate camera with the LPD module enabled. Route by SQL shape.
+                    pool.query.mockImplementation((sql) => {
+                        if (typeof sql === "string" && sql.includes("camera_module_assignments")) {
+                            return Promise.resolve({ rowCount: lpdRowCount });
+                        }
+                        return Promise.resolve({ rowCount: cameraRowCount });
+                    });
 
                     const req = { params: { lane_id: laneId } };
                     const res = freshRes();
@@ -61,9 +71,17 @@ describe("Feature: unified-checkin-kiosk, Property 8: Gateway Config API — exi
                             data.vehicle_type === "bike" ||
                             data.vehicle_type === null
                     ).toBe(true);
-                    // has_camera is a boolean reflecting the rowCount
+                    // has_camera is a boolean reflecting the camera-existence rowCount
                     expect(typeof data.has_camera).toBe("boolean");
-                    expect(data.has_camera).toBe(rowCount > 0);
+                    expect(data.has_camera).toBe(cameraRowCount > 0);
+
+                    // lpd_enabled is a boolean: true only when the lane policy permits
+                    // LPD AND an enabled LPD plate camera exists for the lane/direction.
+                    const laneAllowsLpd = data.allowed_trigger_modules.some(
+                        (m) => String(m).toUpperCase() === "LPD"
+                    );
+                    expect(typeof data.lpd_enabled).toBe("boolean");
+                    expect(data.lpd_enabled).toBe(laneAllowsLpd && lpdRowCount > 0);
                 }
             ),
             { numRuns: 100 }

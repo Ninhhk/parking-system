@@ -115,9 +115,9 @@ describe("checkout service", () => {
         ).rejects.toThrow("Requested amount does not match server-calculated amount");
     });
 
-    it("confirmCashCheckout rejects non-cash method", async () => {
+    it("settleCheckout rejects CARD method", async () => {
         await expect(
-            checkoutService.confirmCashCheckout({ sessionId: 1, totalAmount: 1000, paymentMethod: "CARD" })
+            checkoutService.settleCheckout({ sessionId: 1, totalAmount: 1000, paymentMethod: "CARD" })
         ).rejects.toThrow("CARD must be finalized by webhook");
     });
 
