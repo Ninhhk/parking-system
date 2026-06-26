@@ -4,7 +4,7 @@ const { pool } = require("../config/db");
  * Find sessions with dynamic filters, pagination, and total count.
  * Uses COUNT(*) OVER() window function to get total in a single query.
  */
-exports.findSessions = async ({ plate, sessionId, cardUid, startDate, endDate, vehicleType, lotId, status, page, pageSize }) => {
+exports.findSessions = async ({ plate, sessionId, cardUid, startDate, endDate, vehicleType, lotId, status, q, page, pageSize }) => {
     const offset = (page - 1) * pageSize;
 
     const query = `
@@ -26,6 +26,14 @@ exports.findSessions = async ({ plate, sessionId, cardUid, startDate, endDate, v
             OR ($10 = 'completed' AND ps.is_lost = false AND ps.time_out IS NOT NULL)
             OR ($10 = 'lost_ticket' AND ps.is_lost = true)
           )
+          AND (
+            $11::text IS NULL
+            OR ps.license_plate ILIKE '%' || $11 || '%'
+            OR CAST(ps.session_id AS text) ILIKE '%' || $11 || '%'
+            OR ps.card_uid ILIKE '%' || $11 || '%'
+            OR ps.vehicle_type ILIKE '%' || $11 || '%'
+            OR pl.lot_name ILIKE '%' || $11 || '%'
+          )
         ORDER BY ps.time_in DESC
         LIMIT $8 OFFSET $9
     `;
@@ -41,6 +49,7 @@ exports.findSessions = async ({ plate, sessionId, cardUid, startDate, endDate, v
         pageSize,
         offset,
         status || null,
+        q && q.trim() ? q.trim() : null,
     ];
 
     const result = await pool.query(query, params);

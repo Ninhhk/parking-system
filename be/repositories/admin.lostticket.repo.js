@@ -21,6 +21,9 @@ exports.getLostTicketReports = async ({ page, pageSize, q } = {}) => {
         conditions.push(`(
             ps.license_plate ILIKE $${idx}
             OR CAST(ps.session_id AS text) ILIKE $${idx}
+            OR CAST(ltr.reportid AS text) ILIKE $${idx}
+            OR ps.vehicle_type ILIKE $${idx}
+            OR CAST(ltr.penalty_fee AS text) ILIKE $${idx}
             OR ltr.guest_phone ILIKE $${idx}
         )`);
     }

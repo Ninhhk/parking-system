@@ -20,7 +20,7 @@ function deriveSessionStatus(session) {
  * @param {Object} params - Filter and pagination parameters
  * @returns {Promise<Object>} { sessions, pagination } or throws on validation error
  */
-async function getAuditSessions({ plate, sessionId, cardUid, startDate, endDate, vehicleType, lotId, status, page = 1, pageSize = 20, requesterRole, requesterId }) {
+async function getAuditSessions({ plate, sessionId, cardUid, startDate, endDate, vehicleType, lotId, status, q, page = 1, pageSize = 20, requesterRole, requesterId }) {
     // Employee callers are scoped to the lot they manage; ignore any provided lotId.
     let effectiveLotId = lotId;
     if (requesterRole === "employee") {
@@ -54,6 +54,7 @@ async function getAuditSessions({ plate, sessionId, cardUid, startDate, endDate,
         vehicleType,
         lotId: effectiveLotId,
         status,
+        q,
         page,
         pageSize,
     });

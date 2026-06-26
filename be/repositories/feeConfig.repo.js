@@ -29,10 +29,11 @@ exports.getActiveConfig = async (vehicleType, referenceTime) => {
 
 exports.getAllVersions = async (vehicleType) => {
     const result = await pool.query(
-        `SELECT *
-         FROM fee_config_versions
-         WHERE vehicle_type = $1
-         ORDER BY effective_from DESC`,
+        `SELECT fcv.*, u.username AS created_by_username
+         FROM fee_config_versions fcv
+         LEFT JOIN users u ON fcv.created_by = u.user_id
+         WHERE fcv.vehicle_type = $1
+         ORDER BY fcv.effective_from DESC`,
         [vehicleType]
     );
     return result.rows;

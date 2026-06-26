@@ -8,7 +8,7 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  */
 exports.getAuditSessions = async (req, res) => {
     try {
-        const { plate, cardUid, startDate, endDate, vehicleType, lotId, status } = req.query;
+        const { plate, cardUid, startDate, endDate, vehicleType, lotId, status, q } = req.query;
         const page = req.query.page ? parseInt(req.query.page, 10) : 1;
         const pageSize = req.query.pageSize ? parseInt(req.query.pageSize, 10) : 20;
 
@@ -103,6 +103,7 @@ exports.getAuditSessions = async (req, res) => {
             vehicleType,
             lotId: parsedLotId,
             status,
+            q,
             page,
             pageSize,
             requesterRole: req.session?.user?.role,

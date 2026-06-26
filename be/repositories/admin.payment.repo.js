@@ -33,6 +33,7 @@ exports.getPayments = async ({ page, pageSize, from, to, q }) => {
             CAST(p.payment_id AS text) ILIKE $${idx}
             OR CAST(p.session_id AS text) ILIKE $${idx}
             OR p.payment_method ILIKE $${idx}
+            OR CAST(p.total_amount AS text) ILIKE $${idx}
         )`);
     }
 
