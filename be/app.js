@@ -86,6 +86,7 @@ app.use("/api/employee", employeeRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/edge", edgeRoutes);
 app.get("/api/gate-state/:laneId", gateStateController.getState);
+app.post("/api/gate-state/:laneId", gateStateController.setState);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
