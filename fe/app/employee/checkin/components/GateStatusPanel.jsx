@@ -55,14 +55,16 @@ export default function GateStatusPanel({ isOpen, isHoldMode, onManualOpen, onHo
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={onManualOpen}
-                        className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-800 transition-all duration-200 cursor-pointer active:scale-[0.97] shadow-sm"
-                    >
-                        Manual Open
-                    </button>
-                    {onHoldOpen && (
+                    {!isOpen && (
+                        <button
+                            type="button"
+                            onClick={onManualOpen}
+                            className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-800 transition-all duration-200 cursor-pointer active:scale-[0.97] shadow-sm"
+                        >
+                            Manual Open
+                        </button>
+                    )}
+                    {!isOpen && onHoldOpen && (
                         <button
                             type="button"
                             onClick={() => setConfirmHold(true)}
@@ -83,7 +85,7 @@ export default function GateStatusPanel({ isOpen, isHoldMode, onManualOpen, onHo
                 </div>
             </div>
 
-            {confirmHold && (
+            {!isOpen && confirmHold && (
                 <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
                     <p className="text-xs font-semibold text-amber-800 mb-2">
                         Hold the gate open indefinitely? It stays open through any payment result or auto-close until you press Manual Close.

@@ -126,3 +126,10 @@ export async function getSubscriptionByCard(cardUid) {
     const res = await api.get(`/employee/subscription/by-card/${cardUid}`);
     return res.data.data;
 }
+
+
+// Set gate state (for gate-light sync on manual/hold open/close)
+export async function setGateLight(laneId, { status, plate, message }) {
+    const res = await api.post(`/gate-state/${laneId}`, { status, plate, message });
+    return res.data;
+}

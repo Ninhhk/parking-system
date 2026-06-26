@@ -32,7 +32,7 @@ function emptyForm() {
 
 function ActiveConfigPanel({ configs, loading }) {
     if (loading) {
-        return <p className="text-gray-500 text-sm">Loading active configs…</p>;
+        return <p className="text-slate-500 text-sm">Loading active configs…</p>;
     }
     if (!configs) return null;
 
@@ -44,15 +44,15 @@ function ActiveConfigPanel({ configs, loading }) {
                 const cfg = configs[vt];
                 if (!cfg) {
                     return (
-                        <div key={vt} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                            <h3 className="font-semibold text-gray-700 capitalize mb-2">{vt}</h3>
-                            <p className="text-gray-400 text-sm">No active config found.</p>
+                        <div key={vt} className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                            <h3 className="font-semibold text-slate-700 capitalize mb-2">{vt}</h3>
+                            <p className="text-slate-400 text-sm">No active config found.</p>
                         </div>
                     );
                 }
                 return (
-                    <div key={vt} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                        <h3 className="font-semibold text-gray-700 capitalize mb-3">{vt}</h3>
+                    <div key={vt} className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                        <h3 className="font-semibold text-slate-700 capitalize mb-3">{vt}</h3>
                         <dl className="space-y-1 text-sm">
                             <ConfigRow label="Effective from" value={formatDateTime(cfg.effective_from)} />
                             <ConfigRow label="Rounding strategy" value={cfg.rounding_strategy} />
@@ -90,8 +90,8 @@ function ActiveConfigPanel({ configs, loading }) {
 function ConfigRow({ label, value }) {
     return (
         <div className="flex justify-between">
-            <dt className="text-gray-500">{label}</dt>
-            <dd className="text-gray-800 font-medium">{String(value)}</dd>
+            <dt className="text-slate-500">{label}</dt>
+            <dd className="text-slate-800 font-medium">{String(value)}</dd>
         </div>
     );
 }
@@ -106,8 +106,8 @@ function FieldError({ errors, field }) {
 
 function inputCls(errors, field) {
     const hasErr = errors?.some((e) => e.field === field);
-    return `mt-1 block w-full border rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
-        hasErr ? "border-red-400" : "border-gray-300"
+    return `mt-1 block w-full border rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
+        hasErr ? "border-red-400" : "border-slate-200"
     }`;
 }
 
@@ -205,8 +205,8 @@ function ConfigEditorForm({ onSaved }) {
         }
     };
 
-    const labelCls = "block text-sm font-medium text-gray-700";
-    const toggleCls = "h-4 w-4 text-blue-600 border-gray-300 rounded";
+    const labelCls = "block text-sm font-medium text-slate-700";
+    const toggleCls = "h-4 w-4 text-indigo-600 border-slate-300 rounded";
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -291,7 +291,7 @@ function ConfigEditorForm({ onSaved }) {
             </div>
 
             {/* Daily cap */}
-            <div className="border border-gray-200 rounded-lg p-4">
+            <div className="border border-slate-200 rounded-lg p-4">
                 <label className="flex items-center gap-2 cursor-pointer">
                     <input
                         type="checkbox"
@@ -319,7 +319,7 @@ function ConfigEditorForm({ onSaved }) {
             </div>
 
             {/* Tiered rate */}
-            <div className="border border-gray-200 rounded-lg p-4">
+            <div className="border border-slate-200 rounded-lg p-4">
                 <label className="flex items-center gap-2 cursor-pointer">
                     <input
                         type="checkbox"
@@ -372,7 +372,7 @@ function ConfigEditorForm({ onSaved }) {
                             <button
                                 type="button"
                                 onClick={addTier}
-                                className="text-blue-600 hover:underline text-sm"
+                                className="text-indigo-600 hover:underline text-sm"
                             >
                                 + Add bracket
                             </button>
@@ -382,7 +382,7 @@ function ConfigEditorForm({ onSaved }) {
             </div>
 
             {/* Time-of-day */}
-            <div className="border border-gray-200 rounded-lg p-4">
+            <div className="border border-slate-200 rounded-lg p-4">
                 <label className="flex items-center gap-2 cursor-pointer">
                     <input
                         type="checkbox"
@@ -443,7 +443,7 @@ function ConfigEditorForm({ onSaved }) {
                             <button
                                 type="button"
                                 onClick={addWindow}
-                                className="text-blue-600 hover:underline text-sm"
+                                className="text-indigo-600 hover:underline text-sm"
                             >
                                 + Add window
                             </button>
@@ -470,7 +470,7 @@ function ConfigEditorForm({ onSaved }) {
             <button
                 type="submit"
                 disabled={saving}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+                className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium"
             >
                 {saving ? "Saving…" : "Save config version"}
             </button>
@@ -492,29 +492,29 @@ function VersionHistoryTable({ vehicleType }) {
             .finally(() => setLoading(false));
     }, [vehicleType]);
 
-    if (loading) return <p className="text-gray-500 text-sm">Loading history…</p>;
-    if (!versions.length) return <p className="text-gray-400 text-sm">No versions found.</p>;
+    if (loading) return <p className="text-slate-500 text-sm">Loading history…</p>;
+    if (!versions.length) return <p className="text-slate-400 text-sm">No versions found.</p>;
 
     return (
         <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50/75">
                     <tr>
                         {["Effective from", "Created by", "Created at", "Hourly rate", "Rounding"].map((h) => (
                             <th
                                 key={h}
-                                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                className="px-4 py-3 text-left text-[10px] font-bold font-mono text-slate-500 uppercase tracking-wider"
                             >
                                 {h}
                             </th>
                         ))}
                     </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-slate-150">
                     {versions.map((v) => (
-                        <tr key={v.config_version_id} className="hover:bg-gray-50">
+                        <tr key={v.config_version_id} className="hover:bg-indigo-50/20 transition-colors">
                             <td className="px-4 py-3 whitespace-nowrap">{formatDateTime(v.effective_from)}</td>
-                            <td className="px-4 py-3 whitespace-nowrap">{v.created_by ?? "—"}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">{v.created_by_username ?? "—"}</td>
                             <td className="px-4 py-3 whitespace-nowrap">{formatDateTime(v.created_at)}</td>
                             <td className="px-4 py-3 whitespace-nowrap">{v.hourly_rate}</td>
                             <td className="px-4 py-3 whitespace-nowrap">{v.rounding_strategy}</td>
@@ -580,42 +580,42 @@ function FeeConfigContent() {
 
     return (
         <div className="container mx-auto p-6 space-y-8">
-            <h1 className="text-2xl font-bold text-gray-800">Pricing Engine Configuration</h1>
+            <h1 className="text-2xl font-bold text-slate-800">Pricing Engine Configuration</h1>
 
             {/* Section 1 — Active Config */}
-            <section>
-                <div className="bg-blue-600 text-white px-6 py-4 rounded-t-lg">
-                    <h2 className="text-lg font-semibold">Active Configuration</h2>
+            <section className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-lg font-semibold text-slate-800">Active Configuration</h2>
                 </div>
-                <div className="bg-white border border-t-0 border-gray-200 rounded-b-lg p-6">
+                <div className="p-6">
                     <ActiveConfigPanel configs={activeConfigs} loading={activeLoading} />
                 </div>
             </section>
 
             {/* Section 2 — Config Editor */}
-            <section>
-                <div className="bg-blue-600 text-white px-6 py-4 rounded-t-lg">
-                    <h2 className="text-lg font-semibold">Create New Config Version</h2>
+            <section className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-lg font-semibold text-slate-800">Create New Config Version</h2>
                 </div>
-                <div className="bg-white border border-t-0 border-gray-200 rounded-b-lg p-6">
+                <div className="p-6">
                     <ConfigEditorForm onSaved={handleSaved} />
                 </div>
             </section>
 
             {/* Section 3 — Version History */}
-            <section>
-                <div className="bg-blue-600 text-white px-6 py-4 rounded-t-lg flex items-center justify-between">
-                    <h2 className="text-lg font-semibold">Version History</h2>
+            <section className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-slate-800">Version History</h2>
                     <select
                         value={historyVehicle}
                         onChange={(e) => setHistoryVehicle(e.target.value)}
-                        className="text-gray-800 text-sm rounded px-2 py-1"
+                        className="text-slate-800 text-sm rounded px-2 py-1 border border-slate-200"
                     >
                         <option value="car">Car</option>
                         <option value="bike">Bike</option>
                     </select>
                 </div>
-                <div className="bg-white border border-t-0 border-gray-200 rounded-b-lg p-6">
+                <div className="p-6">
                     <VersionHistoryTable key={`${historyVehicle}-${historyKey}`} vehicleType={historyVehicle} />
                 </div>
             </section>

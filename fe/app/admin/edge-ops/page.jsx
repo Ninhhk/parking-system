@@ -164,7 +164,7 @@ function EdgeOpsContent() {
                     <button
                         type="button"
                         onClick={() => loadData({ silent: true })}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
                     >
                         <FaSync className={refreshing ? "animate-spin" : ""} />
                         Refresh
@@ -175,7 +175,7 @@ function EdgeOpsContent() {
                     <select
                         value={filters.status}
                         onChange={(e) => updateFilter("status", e.target.value)}
-                        className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                        className="border border-slate-200 rounded-md px-3 py-2 text-sm"
                     >
                         <option value="">All status</option>
                         <option value="FAILED">Failed</option>
@@ -188,13 +188,13 @@ function EdgeOpsContent() {
                         value={filters.lane_id}
                         onChange={(e) => updateFilter("lane_id", e.target.value)}
                         placeholder="Lane ID"
-                        className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                        className="border border-slate-200 rounded-md px-3 py-2 text-sm"
                     />
 
                     <select
                         value={filters.trigger}
                         onChange={(e) => updateFilter("trigger", e.target.value)}
-                        className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                        className="border border-slate-200 rounded-md px-3 py-2 text-sm"
                     >
                         <option value="">All triggers</option>
                         <option value="LPD">LPD</option>
@@ -208,31 +208,31 @@ function EdgeOpsContent() {
                         value={filters.q}
                         onChange={(e) => updateFilter("q", e.target.value)}
                         placeholder="Search plate/tag/card"
-                        className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                        className="border border-slate-200 rounded-md px-3 py-2 text-sm"
                     />
                 </div>
 
                 {/* Pagination controls */}
                 {eventsPagination && eventsPagination.totalCount > 0 && (
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                        <span className="text-xs text-gray-500">
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                        <span className="text-xs text-slate-500">
                             {eventsPagination.totalCount} event(s)
                         </span>
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => updateFilter("page", Math.max(1, (Number(filters.page) || 1) - 1))}
                                 disabled={(Number(filters.page) || 1) <= 1}
-                                className="px-3 py-1 text-xs border border-gray-200 rounded bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-3 py-1 text-xs border border-slate-200 rounded bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Previous
                             </button>
-                            <span className="text-xs text-gray-600">
+                            <span className="text-xs text-slate-600">
                                 Page {eventsPagination.page} of {eventsPagination.totalPages}
                             </span>
                             <button
                                 onClick={() => updateFilter("page", Math.min(eventsPagination.totalPages, (Number(filters.page) || 1) + 1))}
                                 disabled={(Number(filters.page) || 1) >= eventsPagination.totalPages}
-                                className="px-3 py-1 text-xs border border-gray-200 rounded bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-3 py-1 text-xs border border-slate-200 rounded bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Next
                             </button>
@@ -242,23 +242,23 @@ function EdgeOpsContent() {
             </div>
 
             <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
-                <div className="px-4 py-3 border-b border-gray-200 font-medium text-gray-900">Edge Events</div>
+                <div className="px-4 py-3 border-b border-slate-200 font-medium text-slate-800">Edge Events</div>
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-slate-200">
+                        <thead className="bg-slate-50">
                             <tr>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Event</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Lane</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Trigger</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Status</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Occurred</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Action</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Event</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Lane</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Trigger</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Occurred</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Action</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 bg-white">
+                        <tbody className="divide-y divide-slate-200 bg-white">
                             {!loading && events.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
+                                    <td colSpan={6} className="px-4 py-6 text-center text-sm text-slate-500">
                                         No events found
                                     </td>
                                 </tr>
@@ -267,9 +267,9 @@ function EdgeOpsContent() {
                                     const isFailed = String(event.status || "").toUpperCase() === "FAILED";
                                     return (
                                         <tr key={event.event_id}>
-                                            <td className="px-4 py-3 text-sm text-gray-800">{event.event_id}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-600">{event.lane_id || "-"}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-600">
+                                            <td className="px-4 py-3 text-sm text-slate-800">{event.event_id}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-600">{event.lane_id || "-"}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-600">
                                                 {event.payload_json?.triggerType || "-"}
                                             </td>
                                             <td className="px-4 py-3 text-sm">
@@ -277,13 +277,13 @@ function EdgeOpsContent() {
                                                     {event.status || "UNKNOWN"}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-sm text-gray-600">{formatDateTime(event.occurred_at)}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-600">{formatDateTime(event.occurred_at)}</td>
                                             <td className="px-4 py-3 text-sm">
                                                 <button
                                                     type="button"
                                                     disabled={!isFailed || retryingId === event.event_id}
                                                     onClick={() => handleRetry(event.event_id)}
-                                                    className="px-3 py-1.5 rounded-md text-xs font-medium bg-red-600 text-white disabled:bg-gray-300 disabled:text-gray-500"
+                                                    className="px-3 py-1.5 rounded-md text-xs font-medium bg-red-600 text-white disabled:bg-slate-200 disabled:text-slate-500"
                                                 >
                                                     {retryingId === event.event_id ? "Retrying..." : "Retry"}
                                                 </button>
@@ -298,33 +298,33 @@ function EdgeOpsContent() {
             </div>
 
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-200 font-medium text-gray-900">Active Sessions</div>
+                <div className="px-4 py-3 border-b border-slate-200 font-medium text-slate-800">Active Sessions</div>
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-slate-200">
+                        <thead className="bg-slate-50">
                             <tr>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Session</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Plate</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Vehicle</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Lane</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Time In</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Session</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Plate</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Vehicle</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Lane</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Time In</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 bg-white">
+                        <tbody className="divide-y divide-slate-200 bg-white">
                             {!loading && activeSessions.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-500">
+                                    <td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">
                                         No active sessions found
                                     </td>
                                 </tr>
                             ) : (
                                 activeSessions.map((session) => (
                                     <tr key={session.session_id}>
-                                        <td className="px-4 py-3 text-sm text-gray-800">{session.session_id}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">{session.license_plate || "-"}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">{session.vehicle_type || "-"}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">{session.entry_lane_id || "-"}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">{formatDateTime(session.time_in)}</td>
+                                        <td className="px-4 py-3 text-sm text-slate-800">{session.session_id}</td>
+                                        <td className="px-4 py-3 text-sm text-slate-600">{session.license_plate || "-"}</td>
+                                        <td className="px-4 py-3 text-sm text-slate-600">{session.vehicle_type || "-"}</td>
+                                        <td className="px-4 py-3 text-sm text-slate-600">{session.entry_lane_id || "-"}</td>
+                                        <td className="px-4 py-3 text-sm text-slate-600">{formatDateTime(session.time_in)}</td>
                                     </tr>
                                 ))
                             )}
@@ -337,7 +337,7 @@ function EdgeOpsContent() {
 }
 
 function EdgeOpsLoading() {
-    return <div className="p-6 text-sm text-gray-600">Loading edge ops...</div>;
+    return <div className="p-6 text-sm text-slate-600">Loading edge ops...</div>;
 }
 
 export default function EdgeOpsPage() {

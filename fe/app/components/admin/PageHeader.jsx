@@ -11,9 +11,9 @@
 export default function PageHeader({ title, buttonText, onButtonClick }) {
     return (
         <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold">{title}</h1>
+            <h1 className="text-2xl font-bold text-slate-800">{title}</h1>
             {buttonText && onButtonClick && (
-                <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" onClick={onButtonClick}>
+                <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors hover:bg-indigo-700" onClick={onButtonClick}>
                     {buttonText}
                 </button>
             )}

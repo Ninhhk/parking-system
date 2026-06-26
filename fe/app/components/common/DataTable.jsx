@@ -24,8 +24,8 @@ export default function DataTable({
     if (loading) {
         return (
             <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading...</p>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                <p className="text-slate-500">Loading...</p>
             </div>
         );
     }
@@ -33,86 +33,86 @@ export default function DataTable({
     const actions = onEdit || onDelete || onDetail ? ["edit", "detail", "delete"] : [];
 
     return (
-        <div className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200">
-            <div className="bg-blue-600 text-white px-6 py-4 flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Data Table</h2>
-                <span className="bg-white text-blue-600 rounded-full px-3 py-1 text-sm font-semibold">
-                    {data.length} items
-                </span>
-            </div>
-            <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            {columns.map((column) => (
-                                <th
-                                    key={column.key}
-                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                                >
-                                    {column.label}
-                                </th>
-                            ))}
-                            {actions.length > 0 && (
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Actions
-                                </th>
-                            )}
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {data.map((item) => (
-                            <tr key={item[idField]} className="hover:bg-gray-50">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
+            {data.length === 0 ? (
+                <div className="bg-slate-50 border border-dashed border-slate-250 rounded-xl p-12 text-center font-mono">
+                    <p className="text-slate-400 text-xs uppercase tracking-wider">No data available.</p>
+                </div>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-150">
+                        <thead className="bg-slate-50/75">
+                            <tr>
                                 {columns.map((column) => (
-                                    <td
-                                        key={`${item[idField]}-${column.key}`}
-                                        className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+                                    <th
+                                        key={column.key}
+                                        className="px-6 py-3.5 text-left text-[10px] font-bold font-mono text-slate-500 uppercase tracking-wider"
                                     >
-                                        {column.key === "guest_identification" &&
-                                        typeof item[column.key] === "string" &&
-                                        item[column.key].startsWith("data:image") ? (
-                                            <img
-                                                src={item[column.key]}
-                                                alt="Guest ID"
-                                                className="max-h-24 max-w-xs rounded border"
-                                            />
-                                        ) : (
-                                            item[column.key]
-                                        )}
-                                    </td>
+                                        {column.label}
+                                    </th>
                                 ))}
                                 {actions.length > 0 && (
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {onEdit && (
-                                            <button
-                                                className="text-blue-600 hover:underline mr-2"
-                                                onClick={() => onEdit(item)}
-                                            >
-                                                Edit
-                                            </button>
-                                        )}
-                                        {onDetail && (
-                                            <button
-                                                className="text-green-600 hover:underline mr-2"
-                                                onClick={() => onDetail(item[idField])}
-                                            >
-                                                Detail
-                                            </button>
-                                        )}
-                                        {onDelete && (
-                                            <button
-                                                className="text-red-600 hover:underline"
-                                                onClick={() => onDelete(item[idField])}
-                                            >
-                                                Delete
-                                            </button>
-                                        )}
-                                    </td>
+                                    <th className="px-6 py-3.5 text-left text-[10px] font-bold font-mono text-slate-500 uppercase tracking-wider">
+                                        Actions
+                                    </th>
                                 )}
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-slate-150">
+                            {data.map((item) => (
+                                <tr key={item[idField]} className="hover:bg-indigo-50/20 transition-colors">
+                                    {columns.map((column) => (
+                                        <td
+                                            key={`${item[idField]}-${column.key}`}
+                                            className="px-6 py-4 whitespace-nowrap text-xs font-mono text-slate-600"
+                                        >
+                                            {column.key === "guest_identification" &&
+                                            typeof item[column.key] === "string" &&
+                                            item[column.key].startsWith("data:image") ? (
+                                                <img
+                                                    src={item[column.key]}
+                                                    alt="Guest ID"
+                                                    className="max-h-24 max-w-xs rounded border"
+                                                />
+                                            ) : (
+                                                item[column.key]
+                                            )}
+                                        </td>
+                                    ))}
+                                    {actions.length > 0 && (
+                                        <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-slate-600">
+                                            {onEdit && (
+                                                <button
+                                                    className="text-indigo-600 hover:underline mr-2"
+                                                    onClick={() => onEdit(item)}
+                                                >
+                                                    Edit
+                                                </button>
+                                            )}
+                                            {onDetail && (
+                                                <button
+                                                    className="text-emerald-600 hover:underline mr-2"
+                                                    onClick={() => onDetail(item[idField])}
+                                                >
+                                                    Detail
+                                                </button>
+                                            )}
+                                            {onDelete && (
+                                                <button
+                                                    className="text-red-600 hover:underline"
+                                                    onClick={() => onDelete(item[idField])}
+                                                >
+                                                    Delete
+                                                </button>
+                                            )}
+                                        </td>
+                                    )}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 }

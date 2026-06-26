@@ -319,7 +319,7 @@ export async function deleteCardHolder(cardUid) {
 }
 
 // Fetch audit sessions (admin-namespaced — admin role guaranteed access)
-export async function fetchAdminAuditSessions({ plate, sessionId, cardUid, startDate, endDate, vehicleType, lotId, status, page, pageSize } = {}) {
+export async function fetchAdminAuditSessions({ plate, sessionId, cardUid, startDate, endDate, vehicleType, lotId, status, q, page, pageSize } = {}) {
     const params = {};
     if (plate) params.plate = plate;
     if (sessionId) params.sessionId = sessionId;
@@ -329,6 +329,7 @@ export async function fetchAdminAuditSessions({ plate, sessionId, cardUid, start
     if (vehicleType) params.vehicleType = vehicleType;
     if (lotId) params.lotId = lotId;
     if (status) params.status = status;
+    if (q) params.q = q;
     if (page) params.page = page;
     if (pageSize) params.pageSize = pageSize;
 

@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getGatewayLaneConfig, getSubscriptionByCard, checkInByRfid, checkInVehicle, fetchMyLot } from "@/app/api/employee.client";
+import { getGatewayLaneConfig, getSubscriptionByCard, checkInByRfid, checkInVehicle, fetchMyLot, setGateLight } from "@/app/api/employee.client";
 import { fetchEmployeeGateSettings } from "@/app/api/admin.gateSettings.client";
 import { detectLicensePlate } from "@/app/api/employee.lpd.client";
 import KioskCameraPanel from "./components/KioskCameraPanel";
 import ReaderPanel from "./components/ReaderPanel";
 import CasualEntryControl from "./components/CasualEntryControl";
 import VehicleFormPanel from "./components/VehicleFormPanel";
-import ResultPanel from "./components/ResultPanel";
 import GateStatusPanel from "./components/GateStatusPanel";
 import SubscriptionBadge from "./components/SubscriptionBadge";
 
@@ -88,6 +87,7 @@ export default function UnifiedCheckinPage() {
     const cameraRef = useRef(null);
     const gateTimerRef = useRef(null);
     const gateContextRef = useRef(null); // "manual" | "hold" | null
+    const holdKeepAliveRef = useRef(null);
     // Holds the in-flight submission so a capture-failure Retry/Proceed choice can resume it
     const pendingSubmitRef = useRef(null);
 
@@ -166,6 +166,7 @@ export default function UnifiedCheckinPage() {
     useEffect(() => {
         return () => {
             if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
+            if (holdKeepAliveRef.current) clearInterval(holdKeepAliveRef.current);
         };
     }, []);
 
@@ -462,6 +463,12 @@ export default function UnifiedCheckinPage() {
         gateTimerRef.current = null;
         setGateState("open");
         gateContextRef.current = "hold";
+        setGateLight(LANE_ID, { status: "OPEN", message: "Hold mode" }).catch(() => {});
+        // Keep gate-light alive while in hold mode (backend resets after 5s)
+        if (holdKeepAliveRef.current) clearInterval(holdKeepAliveRef.current);
+        holdKeepAliveRef.current = setInterval(() => {
+            setGateLight(LANE_ID, { status: "OPEN", message: "Hold mode" }).catch(() => {});
+        }, 4000);
     };
 
     // Normal open: uses configured duration
@@ -470,10 +477,12 @@ export default function UnifiedCheckinPage() {
         if (gateContextRef.current === "hold") return;
         setGateState("open");
         gateContextRef.current = "manual";
+        setGateLight(LANE_ID, { status: "OPEN", message: "Manual open" }).catch(() => {});
         if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
         gateTimerRef.current = setTimeout(() => {
             setGateState("shut");
             gateContextRef.current = null;
+            setGateLight(LANE_ID, { status: "CLOSED" }).catch(() => {});
         }, autoCloseDurationMs);
     };
 
@@ -481,8 +490,10 @@ export default function UnifiedCheckinPage() {
     const handleManualGateClose = () => {
         if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
         gateTimerRef.current = null;
+        if (holdKeepAliveRef.current) { clearInterval(holdKeepAliveRef.current); holdKeepAliveRef.current = null; }
         setGateState("shut");
         gateContextRef.current = null;
+        setGateLight(LANE_ID, { status: "CLOSED" }).catch(() => {});
     };
 
     const isScanning = kioskState === KIOSK_STATES.SCANNING;
@@ -499,10 +510,46 @@ export default function UnifiedCheckinPage() {
                             Check-in Kiosk
                         </h1>
                     </div>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">UNIFIED GATEWAY TERMINAL</p>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs font-mono">
+                <div className="flex items-center gap-3 text-xs font-mono flex-wrap justify-end">
+                    {/* Inline status readout */}
+                    <div className={`px-3 py-1.5 rounded flex items-center gap-2 shadow-xs border transition-all duration-300 ${
+                        kioskState === KIOSK_STATES.SUCCESS
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                            : kioskState === KIOSK_STATES.DENIED
+                                ? "bg-rose-50 border-rose-200 text-rose-700"
+                                : kioskState === KIOSK_STATES.ERROR || kioskState === KIOSK_STATES.CAPTURE_FAILED
+                                    ? "bg-rose-50 border-rose-200 text-rose-600"
+                                    : kioskState === KIOSK_STATES.SCANNING
+                                        ? "bg-blue-50 border-blue-200 text-blue-700"
+                                        : "bg-gray-50 border-gray-200 text-slate-600"
+                    }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                            kioskState === KIOSK_STATES.SUCCESS ? "bg-emerald-500"
+                                : kioskState === KIOSK_STATES.DENIED || kioskState === KIOSK_STATES.ERROR || kioskState === KIOSK_STATES.CAPTURE_FAILED ? "bg-rose-500"
+                                    : kioskState === KIOSK_STATES.SCANNING ? "bg-blue-500 animate-pulse"
+                                        : "bg-slate-400"
+                        }`} />
+                        <span className="font-semibold tracking-wider text-[10px] uppercase">
+                            {getKioskStatusMessage(kioskState)}
+                        </span>
+                        {resultDetail && (
+                            <span className="text-[10px] opacity-75 max-w-[200px] truncate">
+                                — {resultDetail}
+                            </span>
+                        )}
+                        {ticket?.session_id && (
+                            <span className="text-[10px] font-bold text-indigo-600">#{ticket.session_id}</span>
+                        )}
+                    </div>
+
+                    {lpdEnabled && detectedPlate && (
+                        <div className="bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded flex items-center gap-2 text-emerald-700 shadow-xs">
+                            <span className="text-[9px] text-emerald-500 uppercase tracking-widest font-mono">PLATE:</span>
+                            <span className="font-bold font-mono tracking-wider">{detectedPlate}</span>
+                        </div>
+                    )}
                     <div className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded flex items-center gap-2 text-slate-600 shadow-xs">
                         <span className="text-slate-400 uppercase tracking-widest text-[9px]">CLOCK:</span>
                         <span className="font-bold text-indigo-600 tracking-widest">{currentTime || "00:00:00"}</span>
@@ -619,12 +666,6 @@ export default function UnifiedCheckinPage() {
 
                     {/* SubscriptionBadge — shows when subscription is resolved */}
                     <SubscriptionBadge subscription={subscription} />
-
-                    <ResultPanel
-                        stateLabel={getKioskStatusMessage(kioskState)}
-                        detail={resultDetail}
-                        sessionId={ticket?.session_id}
-                    />
                 </div>
             </div>
         </main>

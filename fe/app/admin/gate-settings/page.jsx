@@ -64,27 +64,27 @@ export default function GateSettingsPage() {
 
     return (
         <div className="container mx-auto p-6 space-y-8">
-            <h1 className="text-2xl font-bold text-gray-800">Gate Control Settings</h1>
+            <h1 className="text-2xl font-bold text-slate-800">Gate Control Settings</h1>
 
-            <section>
-                <div className="bg-blue-600 text-white px-6 py-4 rounded-t-lg">
-                    <h2 className="text-lg font-semibold">Kiosk &amp; Gate Timings</h2>
+            <section className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-lg font-semibold text-slate-800">Kiosk &amp; Gate Timings</h2>
                 </div>
-                <div className="bg-white border border-t-0 border-gray-200 rounded-b-lg p-6">
+                <div className="p-6">
                     {loading ? (
-                        <p className="text-gray-500 text-sm">Loading settings…</p>
+                        <p className="text-slate-500 text-sm">Loading settings…</p>
                     ) : (
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div>
-                                <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                                <div className="flex items-center gap-2 text-sm text-slate-600 mb-1">
                                     <span>Current value:</span>
-                                    <span className="font-semibold text-gray-800">
+                                    <span className="font-semibold text-slate-800">
                                         {currentDuration} seconds
                                     </span>
                                 </div>
                                 <label
                                     htmlFor="duration"
-                                    className="block text-sm font-medium text-gray-700"
+                                    className="block text-sm font-medium text-slate-700"
                                 >
                                     Gate auto-close duration (seconds)
                                 </label>
@@ -96,23 +96,23 @@ export default function GateSettingsPage() {
                                     step="1"
                                     value={durationInput}
                                     onChange={(e) => setDurationInput(e.target.value)}
-                                    className="mt-1 block w-full max-w-xs border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    className="mt-1 block w-full max-w-xs border border-slate-200 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                 />
-                                <p className="mt-1 text-xs text-gray-500">
+                                <p className="mt-1 text-xs text-slate-500">
                                     Valid range: {MIN_DURATION}–{MAX_DURATION} seconds
                                 </p>
                             </div>
 
                             <div>
-                                <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                                <div className="flex items-center gap-2 text-sm text-slate-600 mb-1">
                                     <span>Current value:</span>
-                                    <span className="font-semibold text-gray-800">
+                                    <span className="font-semibold text-slate-800">
                                         {currentInputReset} seconds
                                     </span>
                                 </div>
                                 <label
                                     htmlFor="input-reset"
-                                    className="block text-sm font-medium text-gray-700"
+                                    className="block text-sm font-medium text-slate-700"
                                 >
                                     Kiosk input auto-clear delay (seconds)
                                 </label>
@@ -124,9 +124,9 @@ export default function GateSettingsPage() {
                                     step="1"
                                     value={inputResetInput}
                                     onChange={(e) => setInputResetInput(e.target.value)}
-                                    className="mt-1 block w-full max-w-xs border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    className="mt-1 block w-full max-w-xs border border-slate-200 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                 />
-                                <p className="mt-1 text-xs text-gray-500">
+                                <p className="mt-1 text-xs text-slate-500">
                                     Grace period before the check-in/check-out RFID field clears
                                     and refocuses. Valid range: {MIN_INPUT_RESET}–{MAX_INPUT_RESET} seconds
                                     (0 = clear instantly).
@@ -141,7 +141,7 @@ export default function GateSettingsPage() {
                             <button
                                 type="submit"
                                 disabled={saving}
-                                className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+                                className="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium"
                             >
                                 {saving ? "Saving…" : "Save"}
                             </button>

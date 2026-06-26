@@ -11,7 +11,7 @@ function CustomModal({ isOpen, onClose, children }) {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 backdrop-blur-sm">
             <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4 relative animate-fadeIn">
                 <button
-                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                    className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
                     onClick={onClose}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -112,20 +112,20 @@ export default function NotificationsPage() {
     };
 
     return (
-        <div className="flex min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        <div className="flex min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
             <main className="flex-1 p-6 max-w-7xl mx-auto">
-                <div className="bg-white shadow-lg rounded-xl p-8 border border-gray-100">
+                <div className="bg-white shadow-lg rounded-xl p-8 border border-slate-100">
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-3">
-                            <div className="bg-blue-100 p-3 rounded-full">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <div className="bg-indigo-100 p-3 rounded-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                                 </svg>
                             </div>
-                            <h1 className="text-3xl font-extrabold text-gray-800">Notifications</h1>
+                            <h1 className="text-3xl font-extrabold text-slate-800">Notifications</h1>
                         </div>
                         <button
-                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-md transition-all duration-200 transform hover:scale-105"
+                            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-md transition-all duration-200 transform hover:scale-105"
                             onClick={() => setIsModalOpen(true)}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -137,27 +137,27 @@ export default function NotificationsPage() {
                     
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-12">
-                            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
-                            <p className="text-gray-500">Loading notifications...</p>
+                            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
+                            <p className="text-slate-500">Loading notifications...</p>
                         </div>
                     ) : notifications.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
                             {notifications.map((notification, index) => (
                                 <div 
                                     key={index}
-                                    className="bg-white border border-gray-200 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden"
+                                    className="bg-white border border-slate-200 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden"
                                 >
-                                    <div className="border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white px-5 py-4">
+                                    <div className="border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-white px-5 py-4">
                                         <h2 
-                                            className="text-lg font-bold text-gray-800 cursor-pointer hover:text-blue-600 transition-colors"
+                                            className="text-lg font-bold text-slate-800 cursor-pointer hover:text-indigo-600 transition-colors"
                                             onClick={() => {
                                                 window.location.href = `/admin/notifications/${notification.noti_id}`;
                                             }}
                                         >
                                             {notification.title}
                                         </h2>
-                                        <p className="text-xs text-gray-500 mt-1 flex items-center">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <p className="text-xs text-slate-500 mt-1 flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                             </svg>
                                             {new Date(notification.created_at).toLocaleDateString(undefined, {
@@ -169,7 +169,7 @@ export default function NotificationsPage() {
                                     </div>
                                     
                                     <div className="px-5 py-4">
-                                        <p className="text-sm text-gray-600 line-clamp-2 mb-4">
+                                        <p className="text-sm text-slate-600 line-clamp-2 mb-4">
                                             {notification.message}
                                         </p>
                                         
@@ -199,15 +199,15 @@ export default function NotificationsPage() {
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
-                            <div className="bg-gray-100 p-6 rounded-full mb-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <div className="bg-slate-100 p-6 rounded-full mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                                 </svg>
                             </div>
-                            <h3 className="text-xl font-bold text-gray-700 mb-2">No notifications yet</h3>
-                            <p className="text-gray-500 max-w-sm mb-6">Start by adding your first notification to keep employees informed.</p>
+                            <h3 className="text-xl font-bold text-slate-700 mb-2">No notifications yet</h3>
+                            <p className="text-slate-500 max-w-sm mb-6">Start by adding your first notification to keep employees informed.</p>
                             <button 
-                                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-md transition-all"
+                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-md transition-all"
                                 onClick={() => setIsModalOpen(true)}
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -222,39 +222,39 @@ export default function NotificationsPage() {
                 {/* Add Notification Modal */}
                 <CustomModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
                     <div className="pt-4">
-                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Add New Notification</h2>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-6">Add New Notification</h2>
                         <div className="space-y-4">
                             <div>
-                                <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                <label htmlFor="title" className="block text-sm font-medium text-slate-700 mb-1">Title</label>
                                 <input
                                     id="title"
                                     type="text"
                                     placeholder="Notification title"
                                     value={newNotification.title}
                                     onChange={(e) => setNewNotification({ ...newNotification, title: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                 />
                             </div>
                             <div>
-                                <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                                <label htmlFor="message" className="block text-sm font-medium text-slate-700 mb-1">Message</label>
                                 <textarea
                                     id="message"
                                     placeholder="Enter notification message"
                                     value={newNotification.message}
                                     onChange={(e) => setNewNotification({ ...newNotification, message: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[120px]"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[120px]"
                                 />
                             </div>
                         </div>
                         <div className="mt-6 flex justify-end gap-3">
                             <button
-                                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 transition-colors"
                                 onClick={() => setIsModalOpen(false)}
                             >
                                 Cancel
                             </button>
                             <button
-                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
                                 onClick={handleAddNotification}
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -269,39 +269,39 @@ export default function NotificationsPage() {
                 {/* Update Notification Modal */}
                 <CustomModal isOpen={isUpdateModalOpen} onClose={() => setIsUpdateModalOpen(false)}>
                     <div className="pt-4">
-                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Update Notification</h2>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-6">Update Notification</h2>
                         <div className="space-y-4">
                             <div>
-                                <label htmlFor="updateTitle" className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                <label htmlFor="updateTitle" className="block text-sm font-medium text-slate-700 mb-1">Title</label>
                                 <input
                                     id="updateTitle"
                                     type="text"
                                     placeholder="Notification title"
                                     defaultValue={currentNotification?.title}
                                     onChange={(e) => setCurrentNotification({ ...currentNotification, title: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                 />
                             </div>
                             <div>
-                                <label htmlFor="updateMessage" className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                                <label htmlFor="updateMessage" className="block text-sm font-medium text-slate-700 mb-1">Message</label>
                                 <textarea
                                     id="updateMessage"
                                     placeholder="Enter notification message"
                                     defaultValue={currentNotification?.message}
                                     onChange={(e) => setCurrentNotification({ ...currentNotification, message: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[120px]"
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[120px]"
                                 />
                             </div>
                         </div>
                         <div className="mt-6 flex justify-end gap-3">
                             <button
-                                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 transition-colors"
                                 onClick={() => setIsUpdateModalOpen(false)}
                             >
                                 Cancel
                             </button>
                             <button
-                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
                                 onClick={() => handleUpdateSubmit(currentNotification.title, currentNotification.message)}
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

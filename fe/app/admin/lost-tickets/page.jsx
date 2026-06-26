@@ -65,8 +65,8 @@ export default function LostTicketsPage() {
         <div className="p-6">
             <PageHeader title="Lost Ticket Reports" />
             <div className="mt-6 mb-4">
-                <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden shadow-sm w-80">
-                    <div className="pl-4 text-gray-500">
+                <div className="flex items-center bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm w-80">
+                    <div className="pl-4 text-slate-500">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
@@ -75,11 +75,11 @@ export default function LostTicketsPage() {
                         type="text"
                         value={searchTerm}
                         onChange={handleSearch}
-                        placeholder="Search plate, session ID, phone..."
-                        className="w-full px-4 py-3 text-gray-700 focus:outline-none text-sm"
+                        placeholder="Search by plate, session, vehicle type..."
+                        className="w-full px-4 py-3 text-slate-700 focus:outline-none text-sm"
                     />
                     {searchTerm && (
-                        <button onClick={() => { setSearchTerm(""); setPage(1); }} className="px-4 text-gray-500 hover:text-gray-700">
+                        <button onClick={() => { setSearchTerm(""); setPage(1); }} className="px-4 text-slate-500 hover:text-slate-700">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
@@ -102,25 +102,25 @@ export default function LostTicketsPage() {
 
             {/* Pagination */}
             {!loading && pagination.totalCount > 0 && (
-                <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-                    <span className="text-sm text-gray-500">
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
+                    <span className="text-sm text-slate-500">
                         {pagination.totalCount} report(s)
                     </span>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => setPage(Math.max(1, page - 1))}
                             disabled={page <= 1}
-                            className="px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-3 py-1.5 text-sm border border-slate-200 rounded-md bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Previous
                         </button>
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-slate-600">
                             Page {pagination.page} of {pagination.totalPages}
                         </span>
                         <button
                             onClick={() => setPage(Math.min(pagination.totalPages, page + 1))}
                             disabled={page >= pagination.totalPages}
-                            className="px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-3 py-1.5 text-sm border border-slate-200 rounded-md bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Next
                         </button>

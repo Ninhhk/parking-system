@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
-    HiHome,
     HiOfficeBuilding,
     HiCog,
     HiMenu,
@@ -16,8 +15,11 @@ import {
     HiVideoCamera,
     HiCreditCard,
     HiLockOpen,
+    HiChevronDown,
+    HiChevronRight,
+    HiChevronLeft,
 } from "react-icons/hi";
-import { HiDocumentCurrencyDollar, HiPresentationChartLine, HiSpeakerXMark, HiOutlineBolt } from "react-icons/hi2";
+import { HiDocumentCurrencyDollar, HiPresentationChartLine } from "react-icons/hi2";
 
 import { logout } from "../../api/auth.client";
 import { useUser } from "../providers/UserProvider";
@@ -25,119 +27,207 @@ import { useUser } from "../providers/UserProvider";
 const Sidebar = () => {
     const pathname = usePathname();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [desktopCollapsed, setDesktopCollapsed] = useState(false);
+    const [collapsed, setCollapsed] = useState({});
     const { user } = useUser();
+
+    // Navigation groups
+    const navGroups = [
+        {
+            label: "Dashboard",
+            items: [
+                {
+                    name: "Insight",
+                    href: "/admin/insight",
+                    icon: <HiPresentationChartLine className="h-6 w-6" />,
+                },
+            ],
+        },
+        {
+            label: "Operations",
+            items: [
+                {
+                    name: "Parking Lots",
+                    href: "/admin/parking-lots",
+                    icon: <HiOfficeBuilding className="h-6 w-6" />,
+                },
+                {
+                    name: "Session Audit",
+                    href: "/admin/audit",
+                    icon: <HiDocumentCurrencyDollar className="h-6 w-6" />,
+                },
+                {
+                    name: "Lost Tickets",
+                    href: "/admin/lost-tickets",
+                    icon: <HiQuestionMarkCircle className="h-6 w-6" />,
+                },
+            ],
+        },
+        {
+            label: "Finance",
+            items: [
+                {
+                    name: "Payments",
+                    href: "/admin/payments",
+                    icon: <HiDocumentCurrencyDollar className="h-6 w-6" />,
+                },
+                {
+                    name: "Pricing Engine",
+                    href: "/admin/fee-config",
+                    icon: <HiCog className="h-6 w-6" />,
+                    permission: "can_edit_fees",
+                },
+                {
+                    name: "Checkout Settings",
+                    href: "/admin/checkout-settings",
+                    icon: <HiCreditCard className="h-6 w-6" />,
+                },
+            ],
+        },
+        {
+            label: "Infrastructure",
+            items: [
+                {
+                    name: "Card Pool",
+                    href: "/admin/parking-cards",
+                    icon: <HiCreditCard className="h-6 w-6" />,
+                },
+                {
+                    name: "Cameras",
+                    href: "/admin/cameras",
+                    icon: <HiVideoCamera className="h-6 w-6" />,
+                },
+                {
+                    name: "Gate Settings",
+                    href: "/admin/gate-settings",
+                    icon: <HiLockOpen className="h-6 w-6" />,
+                },
+            ],
+        },
+        {
+            label: "Admin",
+            items: [
+                {
+                    name: "Users",
+                    href: "/admin/users",
+                    icon: <HiIdentification className="h-6 w-6" />,
+                },
+                {
+                    name: "Notifications",
+                    href: "/admin/notifications",
+                    icon: <HiSpeakerphone className="h-6 w-6" />,
+                },
+            ],
+        },
+    ];
+
+    // Auto-collapse groups that don't contain the active page
+    useEffect(() => {
+        const activeGroup = navGroups.find((group) =>
+            group.items.some((item) => pathname?.startsWith(item.href))
+        );
+        const initial = {};
+        navGroups.forEach((group) => {
+            if (group !== activeGroup) {
+                initial[group.label] = true;
+            }
+        });
+        setCollapsed(initial);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Only render on admin pages
     if (!pathname?.startsWith("/admin")) {
         return null;
     }
 
-    // Close sidebar when navigating between pages
+    // Close mobile sidebar when navigating
     useEffect(() => {
         setSidebarOpen(false);
     }, [pathname]);
 
-    // Function to check if a link is active
     const isActive = (path) => pathname === path;
 
-    // Navigation items — computed so permission-gated items can be filtered
-    const navItems = [
-        {
-            name: "Home",
-            href: "/admin/",
-            icon: <HiHome className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Parking Lots",
-            href: "/admin/parking-lots",
-            icon: <HiOfficeBuilding className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Card Pool",
-            href: "/admin/parking-cards",
-            icon: <HiCreditCard className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Users",
-            href: "/admin/users",
-            icon: <HiIdentification className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Payments",
-            href: "/admin/payments",
-            icon: <HiDocumentCurrencyDollar className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Lost tickets",
-            href: "/admin/lost-tickets",
-            icon: <HiQuestionMarkCircle className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Insight",
-            href: "/admin/insight",
-            icon: <HiPresentationChartLine className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Session Audit",
-            href: "/admin/audit",
-            icon: <HiDocumentCurrencyDollar className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Edge Ops",
-            href: "/admin/edge-ops",
-            icon: <HiOutlineBolt className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Cameras",
-            href: "/admin/cameras",
-            icon: <HiVideoCamera className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Pricing Engine",
-            href: "/admin/fee-config",
-            icon: <HiCog className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Gate Settings",
-            href: "/admin/gate-settings",
-            icon: <HiLockOpen className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Checkout Settings",
-            href: "/admin/checkout-settings",
-            icon: <HiCreditCard className="mr-3 h-6 w-6" />,
-        },
-        {
-            name: "Notifications",
-            href: "/admin/notifications",
-            icon: <HiSpeakerphone className="mr-3 h-6 w-6" />,
-        },
-    ];
-
-    // Render navigation links
+    // Render full navigation (mobile + desktop expanded)
     const renderNavigation = () => {
-        return navItems
-            .filter((item) => {
-                if (item.name === "Pricing Engine") {
-                    return !!user?.permissions?.can_edit_fees;
+        return navGroups.map((group) => {
+            const visibleItems = group.items.filter((item) => {
+                if (item.permission) {
+                    return !!user?.permissions?.[item.permission];
                 }
                 return true;
-            })
-            .map((item) => {
-                const active = isActive(item.href);
-                return (
-                    <Link
-                        key={item.name}
-                        href={item.href}
-                        className={`group flex items-center px-2 py-2 text-base font-medium rounded-md ${
-                            active ? "bg-indigo-100 text-indigo-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                        }`}
-                    >
-                        {item.icon}
-                        {item.name}
-                    </Link>
-                );
             });
+
+            if (visibleItems.length === 0) return null;
+
+            const isGroupCollapsed = !!collapsed[group.label];
+
+            return (
+                <div key={group.label} className="mt-3 first:mt-0">
+                    <button
+                        type="button"
+                        onClick={() => setCollapsed((prev) => ({ ...prev, [group.label]: !prev[group.label] }))}
+                        className="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600"
+                    >
+                        {group.label}
+                        {isGroupCollapsed ? (
+                            <HiChevronRight className="h-4 w-4" />
+                        ) : (
+                            <HiChevronDown className="h-4 w-4" />
+                        )}
+                    </button>
+                    {!isGroupCollapsed &&
+                        visibleItems.map((item) => {
+                            const active = isActive(item.href);
+                            return (
+                                <Link
+                                    key={item.name}
+                                    href={item.href}
+                                    className={`group flex items-center px-2 py-2 text-base font-medium rounded-md ${
+                                        active ? "bg-indigo-100 text-indigo-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+                                    }`}
+                                >
+                                    <span className="mr-3">{item.icon}</span>
+                                    {item.name}
+                                </Link>
+                            );
+                        })}
+                </div>
+            );
+        });
+    };
+
+    // Render icon-only navigation (desktop collapsed)
+    const renderCollapsedNavigation = () => {
+        return navGroups.map((group) => {
+            const visibleItems = group.items.filter((item) => {
+                if (item.permission) {
+                    return !!user?.permissions?.[item.permission];
+                }
+                return true;
+            });
+
+            if (visibleItems.length === 0) return null;
+
+            return (
+                <div key={group.label} className="mt-2 first:mt-0">
+                    {visibleItems.map((item) => {
+                        const active = isActive(item.href);
+                        return (
+                            <Link
+                                key={item.name}
+                                href={item.href}
+                                title={item.name}
+                                className={`flex items-center justify-center p-2 rounded-md ${
+                                    active ? "bg-indigo-100 text-indigo-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+                                }`}
+                            >
+                                {item.icon}
+                            </Link>
+                        );
+                    })}
+                </div>
+            );
+        });
     };
 
     const handleLogout = async () => {
@@ -151,10 +241,10 @@ const Sidebar = () => {
     return (
         <>
             {/* Mobile menu button */}
-            <div className="sticky top-0 z-10 md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3 bg-gray-100">
+            <div className="sticky top-0 z-10 md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3 bg-slate-100">
                 <button
                     type="button"
-                    className="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+                    className="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-slate-500 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
                     onClick={() => setSidebarOpen(true)}
                 >
                     <span className="sr-only">Open sidebar</span>
@@ -162,7 +252,7 @@ const Sidebar = () => {
                 </button>
             </div>
 
-            {/* Mobile sidebar */}
+            {/* Mobile sidebar (drawer overlay) */}
             <div
                 className="fixed inset-0 z-40 flex md:hidden"
                 role="dialog"
@@ -170,7 +260,7 @@ const Sidebar = () => {
                 style={{ display: sidebarOpen ? "flex" : "none" }}
             >
                 <div
-                    className="fixed inset-0 bg-gray-600 bg-opacity-75"
+                    className="fixed inset-0 bg-slate-600/75"
                     aria-hidden="true"
                     onClick={() => setSidebarOpen(false)}
                 ></div>
@@ -188,17 +278,14 @@ const Sidebar = () => {
 
                     <div className="flex-1 h-0 pt-5 pb-4 overflow-y-auto">
                         <div className="flex-shrink-0 flex items-center px-4">
-                            <span className="text-indigo-600 font-bold text-xl">Parking System</span>
+                            <Link href="/admin/insight" className="text-indigo-600 font-bold text-xl">Parking System</Link>
                         </div>
                         <nav className="mt-5 px-2 space-y-1">{renderNavigation()}</nav>
                     </div>
-                    <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
-                        <div className="flex items-center">
-                            <div className="ml-3"></div>
-                        </div>
+                    <div className="flex-shrink-0 flex border-t border-slate-200 p-4">
                         <button
                             onClick={handleLogout}
-                            className="ml-auto bg-gray-200 hover:bg-gray-300 rounded-md px-3 py-1 text-sm font-medium text-gray-700"
+                            className="w-full bg-slate-200 hover:bg-slate-300 rounded-md px-3 py-2 text-sm font-medium text-slate-700"
                         >
                             Logout
                         </button>
@@ -206,30 +293,59 @@ const Sidebar = () => {
                 </div>
             </div>
 
-            {/* Static sidebar for desktop */}
-            <div className="hidden md:block md:w-64 md:flex-none">
+            {/* Desktop sidebar — collapsible */}
+            <div
+                className="hidden md:block md:flex-none transition-all duration-200"
+                style={{ width: desktopCollapsed ? "4rem" : "16rem" }}
+            >
                 <div
-                    className="flex flex-col border-r border-gray-200 bg-white fixed top-0 bottom-0"
-                    style={{ width: "16rem" }}
+                    className="flex flex-col border-r border-slate-200 bg-white fixed top-0 bottom-0 transition-all duration-200"
+                    style={{ width: desktopCollapsed ? "4rem" : "16rem" }}
                 >
                     <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
-                        <div className="flex items-center flex-shrink-0 px-4">
-                            <span className="text-indigo-600 font-bold text-xl">Parking System</span>
+                        {/* Logo / collapse toggle */}
+                        <div className="flex items-center justify-between flex-shrink-0 px-3">
+                            {!desktopCollapsed && (
+                                <Link href="/admin/insight" className="text-indigo-600 font-bold text-xl">
+                                    Parking System
+                                </Link>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setDesktopCollapsed((prev) => !prev)}
+                                className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                                title={desktopCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                            >
+                                {desktopCollapsed ? (
+                                    <HiMenu className="h-5 w-5" />
+                                ) : (
+                                    <HiChevronLeft className="h-5 w-5" />
+                                )}
+                            </button>
                         </div>
-                        <nav className="mt-5 flex-1 px-2 space-y-1">{renderNavigation()}</nav>
+
+                        {/* Navigation */}
+                        <nav className="mt-5 flex-1 px-2 space-y-1">
+                            {desktopCollapsed ? renderCollapsedNavigation() : renderNavigation()}
+                        </nav>
                     </div>
-                    <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
-                        <div className="flex items-center">
-                            <div className="ml-3">
-                                <p className="text-base font-medium text-gray-700">{user?.full_name}</p>
-                                <p className="text-sm font-medium text-gray-500">{user?.username}</p>
+
+                    {/* Footer */}
+                    <div className="flex-shrink-0 border-t border-slate-200 p-3">
+                        {!desktopCollapsed && (
+                            <div className="mb-2">
+                                <p className="text-sm font-medium text-slate-700 truncate">{user?.full_name}</p>
+                                <p className="text-xs text-slate-500 truncate">{user?.username}</p>
                             </div>
-                        </div>
+                        )}
                         <button
                             onClick={handleLogout}
-                            className="ml-auto bg-gray-200 hover:bg-gray-300 rounded-md px-3 py-1 text-sm font-medium text-gray-700"
+                            className={`bg-slate-200 hover:bg-slate-300 rounded-md text-sm font-medium text-slate-700 ${
+                                desktopCollapsed ? "w-full p-2" : "w-full px-3 py-1"
+                            }`}
+                            title="Logout"
                         >
-                            Logout
+                            {desktopCollapsed ? <HiX className="h-5 w-5 mx-auto" /> : "Logout"}
                         </button>
                     </div>
                 </div>

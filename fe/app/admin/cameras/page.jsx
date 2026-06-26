@@ -230,7 +230,7 @@ export default function CamerasPage() {
                     )}
 
                     {!formMode && !selectedCamera && (
-                        <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
+                        <div className="bg-white rounded-lg shadow p-6 text-center text-slate-500">
                             Select a camera to view details, or click &quot;+ Add Camera&quot; to create one.
                         </div>
                     )}

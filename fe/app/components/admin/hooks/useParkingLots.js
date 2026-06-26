@@ -50,10 +50,15 @@ export function useParkingLots() {
         }
         
         const lowercasedQuery = searchQuery.toLowerCase();
-        const results = lots.filter(lot => 
-            lot.lot_name.toLowerCase().includes(lowercasedQuery) || 
-            (lot.manager_username && lot.manager_username.toLowerCase().includes(lowercasedQuery))
-        );
+        const results = lots.filter(lot => {
+            const fields = [
+                lot.lot_name,
+                String(lot.car_capacity ?? ""),
+                String(lot.bike_capacity ?? ""),
+                lot.manager_username,
+            ];
+            return fields.some(f => (f || "").toLowerCase().includes(lowercasedQuery));
+        });
         setFilteredLots(results);
     }, [searchQuery, lots]);
 

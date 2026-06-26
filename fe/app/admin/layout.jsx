@@ -1,5 +1,9 @@
 import Sidebar from "../components/admin/Sidebar";
 
+export const metadata = {
+    title: "Parking System - Admin",
+};
+
 /**
  * Admin layout wrapper with sidebar
  *
@@ -8,9 +12,9 @@ import Sidebar from "../components/admin/Sidebar";
  */
 export default function AdminLayout({ children }) {
     return (
-        <div style={{ display: "flex" }}>
+        <div className="flex min-h-screen">
             <Sidebar />
-            <div style={{ flex: 1, padding: 24 }}>{children}</div>
+            <div className="flex-1 p-6 overflow-auto">{children}</div>
         </div>
     );
 }

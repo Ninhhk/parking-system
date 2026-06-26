@@ -117,7 +117,7 @@ export default function InsightPage() {
 
   // Format stats for display
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND'
     }).format(amount);
@@ -246,7 +246,7 @@ export default function InsightPage() {
         <button
           onClick={() => handleTimeRangeChange("weekly")}
           className={`px-4 py-2 rounded ${
-            timeRange === "weekly" ? "bg-blue-600 text-white" : "bg-gray-200"
+            timeRange === "weekly" ? "bg-indigo-600 text-white" : "bg-slate-200"
           }`}
         >
           Weekly
@@ -254,7 +254,7 @@ export default function InsightPage() {
         <button
           onClick={() => handleTimeRangeChange("monthly")}
           className={`px-4 py-2 rounded ${
-            timeRange === "monthly" ? "bg-blue-600 text-white" : "bg-gray-200"
+            timeRange === "monthly" ? "bg-indigo-600 text-white" : "bg-slate-200"
           }`}
         >
           Monthly
@@ -262,7 +262,7 @@ export default function InsightPage() {
         <button
           onClick={() => handleTimeRangeChange("yearly")}
           className={`px-4 py-2 rounded ${
-            timeRange === "yearly" ? "bg-blue-600 text-white" : "bg-gray-200"
+            timeRange === "yearly" ? "bg-indigo-600 text-white" : "bg-slate-200"
           }`}
         >
           Yearly
@@ -315,7 +315,7 @@ export default function InsightPage() {
                   y: {
                     beginAtZero: true,
                     ticks: {
-                      callback: (value) => `$${value.toLocaleString()}`,
+                      callback: (value) => `${value.toLocaleString('vi-VN')}₫`,
                     },
                   },
                 },
@@ -479,7 +479,7 @@ function StatCard({ title, value, icon }) {
       <div className="flex items-center">
         <div className="mr-4">{icon}</div>
         <div>
-          <h3 className="text-sm text-gray-600">{title}</h3>
+          <h3 className="text-sm text-slate-600">{title}</h3>
           <p className="text-xl font-bold">{value}</p>
         </div>
       </div>
@@ -523,42 +523,42 @@ function ExportPanel() {
   return (
     <div className="mt-6 bg-white p-4 rounded-lg shadow">
       <h2 className="text-lg font-semibold mb-3">Export Raw Data</h2>
-      <p className="text-sm text-gray-500 mb-4">Download sessions or payments as .xlsx for external analysis or reporting.</p>
+      <p className="text-sm text-slate-500 mb-4">Download sessions or payments as .xlsx for external analysis or reporting.</p>
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">From</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">From</label>
           <input
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="border border-gray-300 rounded px-3 py-1.5 text-sm"
+            className="border border-slate-200 rounded px-3 py-1.5 text-sm"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">To</label>
           <input
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="border border-gray-300 rounded px-3 py-1.5 text-sm"
+            className="border border-slate-200 rounded px-3 py-1.5 text-sm"
           />
         </div>
         <button
           onClick={() => handleExport("sessions")}
           disabled={exporting === "sessions"}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 text-sm font-medium"
+          className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-slate-200 text-sm font-medium"
         >
           {exporting === "sessions" ? "Exporting..." : "Export Sessions"}
         </button>
         <button
           onClick={() => handleExport("payments")}
           disabled={exporting === "payments"}
-          className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:bg-gray-300 text-sm font-medium"
+          className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:bg-slate-200 text-sm font-medium"
         >
           {exporting === "payments" ? "Exporting..." : "Export Payments"}
         </button>
       </div>
-      {!from && !to && <p className="mt-2 text-xs text-gray-400">Leave dates blank to export all records.</p>}
+      {!from && !to && <p className="mt-2 text-xs text-slate-400">Leave dates blank to export all records.</p>}
     </div>
   );
 }

@@ -30,9 +30,15 @@ export function filterCards(cards, query) {
     }
     const lowercasedQuery = query.toLowerCase();
     return cards.filter((card) => {
-        const uid = (card.card_uid || "").toLowerCase();
-        const lotName = (card.lot_name || "").toLowerCase();
-        return uid.includes(lowercasedQuery) || lotName.includes(lowercasedQuery);
+        const fields = [
+            card.card_uid,
+            card.lot_name,
+            card.status,
+            card.is_monthly ? "monthly" : "",
+            card.monthly_end_date,
+            card.created_at,
+        ];
+        return fields.some(f => (f || "").toString().toLowerCase().includes(lowercasedQuery));
     });
 }
 

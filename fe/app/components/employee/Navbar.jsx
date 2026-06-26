@@ -16,6 +16,7 @@ import {
 import {
     HiOutlineArrowLeftEndOnRectangle,
     HiOutlineArrowRightEndOnRectangle,
+    HiOutlineViewColumns,
 } from "react-icons/hi2";
 
 import { logout } from "../../api/auth.client";
@@ -61,6 +62,7 @@ const Navbar = () => {
         { name: "Home", href: "/employee/", icon: <HiHome className="mr-1.5 h-4 w-4" /> },
         { name: "Check-in", href: "/employee/checkin", icon: <HiOutlineArrowRightEndOnRectangle className="mr-1.5 h-4 w-4" /> },
         { name: "Check-out", href: "/employee/checkout", icon: <HiOutlineArrowLeftEndOnRectangle className="mr-1.5 h-4 w-4" /> },
+        { name: "Dual Lane", href: "/employee/dual-lane", icon: <HiOutlineViewColumns className="mr-1.5 h-4 w-4" /> },
         { name: "Vehicles", href: "/employee/vehicles", icon: <HiClipboardList className="mr-1.5 h-4 w-4" /> },
         { name: "Alerts", href: "/employee/notifications", icon: <HiSpeakerphone className="mr-1.5 h-4 w-4" /> },
         { name: "Profile", href: "/employee/profile", icon: <HiIdentification className="mr-1.5 h-4 w-4" /> },
@@ -81,11 +83,8 @@ const Navbar = () => {
                     {/* Left: Brand & Lane Info */}
                     <div className="flex items-center">
                         <Link href="/employee/" className="flex items-center gap-2 shrink-0 group">
-                            <div className="w-8 h-8 rounded-lg bg-indigo-650 text-white flex items-center justify-center font-bold text-lg shadow-xs transition-transform duration-200 group-hover:scale-105">
-                                P
-                            </div>
                             <span className="font-mono font-bold tracking-wider text-slate-800 text-base">
-                                ParkControl
+                                Parking System
                             </span>
                         </Link>
                         

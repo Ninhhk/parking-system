@@ -56,20 +56,20 @@ export default function CheckoutSettingsPage() {
 
     return (
         <div className="container mx-auto p-6 space-y-8">
-            <h1 className="text-2xl font-bold text-gray-800">Checkout Settings</h1>
+            <h1 className="text-2xl font-bold text-slate-800">Checkout Settings</h1>
 
-            <section>
-                <div className="bg-blue-600 text-white px-6 py-4 rounded-t-lg">
-                    <h2 className="text-lg font-semibold">Default Payment Method</h2>
+            <section className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100">
+                    <h2 className="text-lg font-semibold text-slate-800">Default Payment Method</h2>
                 </div>
-                <div className="bg-white border border-t-0 border-gray-200 rounded-b-lg p-6">
+                <div className="p-6">
                     {loading ? (
-                        <p className="text-gray-500 text-sm">Loading settings…</p>
+                        <p className="text-slate-500 text-sm">Loading settings…</p>
                     ) : (
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <div className="flex items-center gap-2 text-sm text-slate-600">
                                 <span>Current value:</span>
-                                <span className="font-semibold text-gray-800">
+                                <span className="font-semibold text-slate-800">
                                     {labelFor(currentValue)}
                                 </span>
                             </div>
@@ -78,7 +78,7 @@ export default function CheckoutSettingsPage() {
                                 <div>
                                     <label
                                         htmlFor="default-payment-method"
-                                        className="block text-sm font-medium text-gray-700"
+                                        className="block text-sm font-medium text-slate-700"
                                     >
                                         Default payment method
                                     </label>
@@ -86,7 +86,7 @@ export default function CheckoutSettingsPage() {
                                         id="default-payment-method"
                                         value={inputValue}
                                         onChange={(e) => setInputValue(e.target.value)}
-                                        className="mt-1 block w-full max-w-xs border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        className="mt-1 block w-full max-w-xs border border-slate-200 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                     >
                                         {PAYMENT_METHODS.map((m) => (
                                             <option key={m.value} value={m.value}>
@@ -94,7 +94,7 @@ export default function CheckoutSettingsPage() {
                                             </option>
                                         ))}
                                     </select>
-                                    <p className="mt-1 text-xs text-gray-500">
+                                    <p className="mt-1 text-xs text-slate-500">
                                         Pre-selected on the checkout screen. Operators can still
                                         change it per transaction.
                                     </p>
@@ -110,7 +110,7 @@ export default function CheckoutSettingsPage() {
                                 <button
                                     type="submit"
                                     disabled={saving}
-                                    className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+                                    className="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium"
                                 >
                                     {saving ? "Saving…" : "Save"}
                                 </button>

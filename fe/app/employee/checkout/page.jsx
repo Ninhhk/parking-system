@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
     initiateCheckout,
@@ -12,6 +12,7 @@ import {
     fetchPaymentStatus,
     uploadExitImage,
     findActiveSessionByCard,
+    setGateLight,
 } from "@/app/api/employee.client";
 import { useToast } from "@/app/components/providers/ToastProvider";
 import {
@@ -44,6 +45,7 @@ const CARD_STATUS_LABELS = {
     REQUIRES_PAYMENT_METHOD: "Requires payment method",
 };
 
+const LANE_ID = process.env.NEXT_PUBLIC_LANE_ID || "lane-card-lpd-1";
 const CASH_CONFIRM_TIMEOUT_MS = 10000;
 
 const makeIdempotencyKey = (prefix, sessionId) => `${prefix}-${sessionId}-${Date.now()}`;
@@ -70,7 +72,7 @@ const isReusableAttempt = ({ attempt, intentAmount, expectedAmount }) => {
     return amountsMatch(intentAmount, expectedAmount);
 };
 
-export default function CheckoutTerminalPage() {
+function CheckoutTerminalContent() {
     const toast = useToast();
     const searchParams = useSearchParams();
     // Single-screen terminal: the resolved session id lives in state (no route param).
@@ -117,6 +119,7 @@ export default function CheckoutTerminalPage() {
     const [gateState, setGateState] = useState("shut");
     const gateTimerRef = useRef(null);
     const gateContextRef = useRef(null); // "checkout" | "manual" | "hold" | null
+    const holdKeepAliveRef = useRef(null);
 
     // Configurable auto-close duration (fetched from server, fallback 4000ms)
     const [autoCloseDurationMs, setAutoCloseDurationMs] = useState(4000);
@@ -252,6 +255,7 @@ export default function CheckoutTerminalPage() {
     useEffect(() => {
         return () => {
             if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
+            if (holdKeepAliveRef.current) clearInterval(holdKeepAliveRef.current);
         };
     }, []);
 
@@ -311,11 +315,14 @@ export default function CheckoutTerminalPage() {
         }
         if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
         gateTimerRef.current = setTimeout(closeGate, autoCloseDurationMs);
+        setGateLight(LANE_ID, { status: "OPEN", plate: checkout.session?.license_plate || "", message: "Tạm biệt" }).catch(() => {});
     }
 
     function closeGate() {
         if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
         gateTimerRef.current = null;
+        if (holdKeepAliveRef.current) { clearInterval(holdKeepAliveRef.current); holdKeepAliveRef.current = null; }
+        setGateLight(LANE_ID, { status: "CLOSED" }).catch(() => {});
 
         if (gateContextRef.current === "checkout") {
             // Successful checkout finished — return to the idle terminal (no navigation)
@@ -334,6 +341,11 @@ export default function CheckoutTerminalPage() {
         gateTimerRef.current = null;
         setGateState("open");
         gateContextRef.current = "hold";
+        setGateLight(LANE_ID, { status: "OPEN", message: "Hold mode" }).catch(() => {});
+        if (holdKeepAliveRef.current) clearInterval(holdKeepAliveRef.current);
+        holdKeepAliveRef.current = setInterval(() => {
+            setGateLight(LANE_ID, { status: "OPEN", message: "Hold mode" }).catch(() => {});
+        }, 4000);
     }
 
     // Manual Gate Open: open gate without finalize/Success_View (Req 3.8, 3.9)
@@ -892,13 +904,12 @@ export default function CheckoutTerminalPage() {
                                 Checkout Terminal
                             </h1>
                         </div>
-                        <p className="text-xs text-slate-500 font-mono mt-0.5">UNIFIED EXIT TERMINAL</p>
                     </div>
 
-                    <div className="flex items-center gap-4 text-xs font-mono">
-                        <div className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded flex items-center gap-2 text-slate-600 shadow-xs">
-                            <span className="text-slate-400 uppercase tracking-widest text-[9px]">STATUS:</span>
-                            <span className="font-bold text-indigo-650 tracking-widest">READY TO SCAN</span>
+                    <div className="flex items-center gap-3 text-xs font-mono">
+                        <div className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded flex items-center gap-2 shadow-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                            <span className="font-semibold tracking-wider text-[10px] uppercase text-slate-600">Ready to scan</span>
                         </div>
                         <button
                             type="button"
@@ -966,10 +977,27 @@ export default function CheckoutTerminalPage() {
                             Checkout Terminal
                         </h1>
                     </div>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">UNIFIED EXIT TERMINAL</p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+                    {/* Inline status readout */}
+                    <div className={`px-3 py-1.5 rounded flex items-center gap-2 shadow-xs border transition-all duration-300 ${
+                        viewState === "success"
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                            : viewState === "processing"
+                                ? "bg-blue-50 border-blue-200 text-blue-700"
+                                : "bg-gray-50 border-gray-200 text-slate-600"
+                    }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                            viewState === "success" ? "bg-emerald-500"
+                                : viewState === "processing" ? "bg-blue-500 animate-pulse"
+                                    : "bg-slate-400"
+                        }`} />
+                        <span className="font-semibold tracking-wider text-[10px] uppercase">
+                            {viewState === "success" ? "Exit granted" : viewState === "processing" ? "Processing..." : "Awaiting payment"}
+                        </span>
+                    </div>
+
                     <div className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded flex items-center gap-2 text-slate-650 shadow-xs">
                         <span className="text-slate-400 uppercase tracking-widest text-[9px]">SESSION:</span>
                         <span className="font-bold text-slate-700">#{checkout.session.session_id}</span>
@@ -1406,5 +1434,13 @@ export default function CheckoutTerminalPage() {
                 </div>
             )}
         </main>
+    );
+}
+
+export default function CheckoutTerminalPage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
+            <CheckoutTerminalContent />
+        </Suspense>
     );
 }
